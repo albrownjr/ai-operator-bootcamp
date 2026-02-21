@@ -29,6 +29,12 @@ def is_online() -> bool:
 def model_name() -> str:
     return os.getenv("OPENAI_MODEL", "gpt-5.2-codex").strip()
 
+def require_api_key(x_api_key: str | None):
+    expected = os.getenv("SERVICE_API_KEY", "").strip()
+    if not expected:
+        return  # no key required if not set (dev mode)
+    if not x_api_key or x_api_key.strip() != expected:
+        raise Exception("Unauthorized")
 
 @app.get("/")
 def home():
@@ -44,10 +50,18 @@ def home():
 def health():
     return {"ok": True, "online": is_online(), "model": model_name()}
 
+from fastapi import Header, HTTPException
 
 @app.post("/generate")
-def generate_followups(data: LeadInput):
-    # OFFLINE MODE (default)
+def generate_followups(
+    data: LeadInput,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key")
+):
+    expected = os.getenv("SERVICE_API_KEY", "").strip()
+
+    if expected and (not x_api_key or x_api_key.strip() != expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     if not is_online():
         return mock_json(
             name=data.name,
@@ -55,6 +69,32 @@ def generate_followups(data: LeadInput):
             stage=data.stage,
             tone=data.tone,
         )
+
+    try:
+        from openai import OpenAI
+
+        client = OpenAI()
+        prompt = build_prompt(data.name, data.vehicle, data.stage, data.tone)
+
+        resp = client.responses.create(
+            model=model_name(),
+            input=prompt
+        )
+
+        raw = (resp.output_text or "").strip()
+        return json.loads(raw)
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "fallback": mock_json(
+                name=data.name,
+                vehicle=data.vehicle,
+                stage=data.stage,
+                tone=data.tone,
+            ),
+        }
+
 
     # ONLINE MODE
     try:
