@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Deal Execution Desk</title>
+<style>
+:root{color-scheme:dark}body{margin:0;background:#0b1119;color:#f5f7fa;font:15px system-ui}
+main{max-width:1150px;margin:0 auto;padding:25px}
+h1{font-size:27px;margin:0 0 7px}h2{font-size:18px}
+.layout{display:grid;grid-template-columns:minmax(240px,340px) 1fr;gap:18px}
+.panel{background:#161e28;padding:18px;border:1px solid #344252;border-radius:13px;margin:12px 0}
+label{display:block;font-size:12px;margin-bottom:5px;color:#b6c2cf}
+input,select,textarea{width:100%;padding:10px;background:#0b1119;border:1px solid #435165;color:#fff;border-radius:8px;box-sizing:border-box;font:inherit}
+textarea{min-height:80px}button{cursor:pointer;padding:10px 15px;border:none;border-radius:8px;background:#d62938;color:#fff;font-weight:700}
+button:disabled{opacity:.5}.secondary{background:#344252}a{color:#9fd1ff}
+#status{white-space:pre-wrap;min-height:20px;color:#b7edc8}
+.lead{display:block;text-align:left;width:100%;background:#24303f;margin-bottom:8px}
+.lead:focus{outline:2px solid white}.sub{color:#aabbcc;font-size:12px;margin-top:5px}
+.stage{color:#ffca82;font-weight:700}.event{border-left:3px solid #4d647d;padding-left:13px;margin:14px 0}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:160px}.empty{color:#aabbcc}
+@media(max-width:800px){.layout{grid-template-columns:1fr}main{padding:14px}}
+</style></head><body><main>
+<h1>Deal Execution Desk</h1>
+<p class="sub">Internal operations only · Human-approved customer contact · Exact event chronology · No automatic texting</p>
+<section class="panel"><label for="token">Admin token (kept in this tab only)</label>
+<div class="row"><input id="token" type="password" autocomplete="off" placeholder="Enter admin token">
+<button id="load">Load leads</button><a href="/admin" style="align-self:center">Inventory manager</a></div>
+<p id="status" role="status"></p></section>
+<div class="layout">
+<section class="panel"><h2>Buyer opportunities</h2><div id="leads"><p class="empty">Load leads to begin.</p></div></section>
+<div>
+<section class="panel"><h2 id="buyer">Select an opportunity</h2><div id="recommendation" class="empty">The next action will appear here.</div></section>
+<section class="panel"><h2>Record a verified event</h2>
+<form id="record">
+<label>Event type<select name="event_type" id="event_type" required>
+<option value="">Select an actual event</option>
+<optgroup label="Salesperson">
+<option>CALL_ATTEMPTED</option><option>PHONE_CONVERSATION</option><option>TEXT_SENT</option>
+<option>EMAIL_SENT</option><option>VIDEO_SENT</option><option>HISTORY_SENT</option>
+<option>QUOTE_SENT</option><option>CREDIT_APPLICATION_INVITED</option>
+<option>CREDIT_APPLICATION_RECEIVED</option><option>TRADE_DETAILS_COLLECTED</option>
+<option>DELIVERY_PLAN_PRESENTED</option>
+</optgroup><optgroup label="Customer statements">
+<option>MOTIVATION_STATED</option><option>TIMELINE_STATED</option><option>FINANCING_STATED</option>
+<option>CONDITION_ACCEPTED</option><option>CONDITION_CONCERN</option>
+<option>QUOTE_ACCEPTED</option><option>QUOTE_CONCERN</option>
+<option>BUYER_DECLINED</option><option>DELIVERY_PREFERENCE</option>
+</optgroup><optgroup label="Management verified">
+<option>PRICE_APPROVED</option><option>TRADE_APPROVED</option><option>FINANCING_STRUCTURE_CONFIRMED</option>
+<option>PURCHASE_CONFIRMED</option><option>DELIVERY_COMPLETED</option><option>DEAL_LOST</option>
+</optgroup><option>NOTE_ADDED</option></select></label>
+<div class="row"><div><label>Actor type<select id="actor_type" name="actor_type" required>
+<option value="salesperson">Salesperson</option><option value="customer">Customer</option>
+<option value="management">Management</option><option value="workflow">Workflow (notes only)</option>
+</select></label></div><div><label>Actor name<input name="actor_name" required maxlength="120"></label></div></div>
+<label>Actual event date/time (local)<input id="occurred" type="datetime-local" required></label>
+<label>Evidence/source<input name="source" required maxlength="300" placeholder="CRM conversation / phone / dealership-approved quote"></label>
+<label>Actual statement or action details<textarea name="statement" required maxlength="3000"></textarea></label>
+<button type="submit" id="save" disabled>Record event</button>
+<p class="sub">Do not record a customer statement unless the customer actually said it. Do not mark financing, deals, or delivery as approved without actual dealership confirmation.</p>
+</form></section>
+<section class="panel"><h2>Timestamped timeline</h2><div id="timeline" class="empty">No buyer selected.</div></section>
+</div></div>
+</main><script src="/static/deal_desk.js"></script></body></html>
