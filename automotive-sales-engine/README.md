@@ -40,6 +40,22 @@ Admin APIs require `Authorization: Bearer $ADMIN_TOKEN`; production fails closed
 4. Mark the car SOLD in `/admin`: it disappears from the public inventory and no longer accepts new leads; existing lead history stays.
 5. Re-observe the website listing: SOLD remains until an explicit authorized reactivation.
 
+## Deal Execution Engine (V1 workflow)
+
+Protected operator desk: `GET /deal-desk`, after deployment. Enter the admin token in the browser tab, choose an actual lead, review the recommended action, and record verified events.
+
+- `GET /api/admin/leads/{lead_id}/deal`: timestamped customer/salesperson/management history, next action and recorded outcome.
+- `POST /api/admin/leads/{lead_id}/events`: append-only evidence event, requiring source, actor, actual timezone-aware timestamp, statement and idempotency key.
+- Actor permissions distinguish customer statements from salesperson actions and management approvals; a workflow note cannot impersonate the customer.
+- Motivation -> timeline -> financial preference -> condition acceptance -> approved quote -> buyer response -> purchase confirmation -> actual delivery. Known steps aren't re-asked.
+- Sent videos are not evidence of reviewed/accepted condition. Sent quotes are not evidence of accepted terms.
+- If an unanswered call is recorded and both calling and texting are permitted for that buyer, the next action is a contextual personal text; a phone conversation may replace that action.
+- Buyer decline, condition concern, and pricing concern become explicit reviews rather than automatic pressure.
+- Only management events can record `DELIVERY_COMPLETED` as SOLD or `DEAL_LOST` as LOST. The events are human recorded; they do not make financial or lending decisions.
+- If the vehicle is marked SOLD, the deal packet requires a sold-vehicle review regardless of ordinary discovery progression.
+- Current deal stage and next action update from recorded evidence, but no email, SMS, or telephone call is executed automatically.
+- **Limitations:** the independent app does not yet ingest CRM due tasks, verify phone conversations, enforce real-world scheduling, execute financing, or provide real-time alerts. Due CRM tasks must still be handled manually under the existing call + text rules.
+
 ## First-contact sales plan
 Capture interest alone does not establish purchase intent, vehicle-condition acceptance, or an approved deal. The plan asks one motivation question first, then moves to timeline and financial information when appropriate, without re-asking known facts. It is an internal action plan—not an automatic customer message. The owner's call + contextual SMS standard applies for CRM tasks due when permitted.
 
@@ -56,11 +72,11 @@ On a production-capable Railway account or equivalent:
 **Deployment blocker from last attempt:** Railway trial expired; no Railway project or live URL was created. A paid hosting plan or alternative hosting authorization is required. A runtime restart **without** a persistent volume will lose leads.
 
 ## Tests
-`python -m unittest -v test_inventory_registry.py test_decision_intelligence.py`
+`python -m unittest -v test_inventory_registry.py test_decision_intelligence.py test_deal_execution.py`
 Integration tests require packages from `requirements.txt` plus `httpx`. GitHub Actions test configuration is present; success must be confirmed from workflow logs. No test pass is claimed from a mere commit.
 
 ## Production safety gates
 Confirm dealership authorization for the standalone form, privacy/consent requirements, advertising copy and current full price disclosure; use actual vehicle imagery, not illustrative photography; verify backup and access control; run an end-to-end submission test; and establish a human alert/ownership workflow for `FIRST_CONTACT`.
 
 ## Next build layers
-This delivery is **dynamic inventory + lead capture + first-action evidence**. It does **not** automatically discover all website listings, ingest a CRM, execute follow-up, send messages, structure financing, or sell cars without a salesperson. Those must be measured and built only after the core flow is verified.
+This delivery includes **dynamic inventory + lead capture + timestamped deal-execution tracking and evidence-based next actions**. It does **not** automatically discover all website listings, ingest a CRM, execute follow-up, send messages, structure financing, or sell cars without a salesperson. Those must be measured and built only after the core flow is verified.
