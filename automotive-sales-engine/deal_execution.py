@@ -7,6 +7,7 @@ customer agreement, lending decisions, prices or SOLD outcomes.
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Any
+from followup_tasks import lead_tasks
 import json
 import sqlite3
 import uuid
@@ -201,7 +202,16 @@ def deal_packet(conn: sqlite3.Connection, lead_id: str) -> dict:
                   "objective":"Notify buyer appropriately and review available alternatives only if desired",
                   "reason":"Salesperson explicitly marked the requested vehicle SOLD"}
     outcome = conn.execute("SELECT outcome,recorded_at FROM deal_outcomes WHERE lead_id=?",(lead_id,)).fetchone()
+    tasks = lead_tasks(conn,lead_id)
+    due = [t for t in tasks if t["computed_status"] in ("DUE_TODAY","OVERDUE")]
+    if due and not outcome:
+        action = {"stage":action["stage"],
+                  "code":"PERSONAL_FOLLOWUP_DUE",
+                  "objective":"Complete required personal contact for the due/overdue follow-up task",
+                  "reason":"An active due follow-up cannot be skipped; review the task's permitted channel and recorded contact"}
     return {"lead":dict(lead),"timeline":events,"recommendation":action,
+            "tasks":tasks,"due_task_count":len(due),
+            "deal_progress_action":next_action(events,dict(lead)),
             "outcome":dict(outcome) if outcome else None,
             "human_approval_required":True,
-            "note":"A workflow action is a recommendation, not evidence of executed contact or an approved deal."}
+            "note":"Recorded event and due-task evidence are not automatic customer contact."}
