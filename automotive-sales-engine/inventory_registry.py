@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from datetime import datetime, timezone
+from contextlib import nullcontext
 from urllib.parse import urlparse
 
 VIN_RE = re.compile(r"^[A-HJ-NPR-Z0-9]{17}$")
@@ -94,7 +95,7 @@ def observe_listing(conn: sqlite3.Connection, data: dict, actor: str = "admin") 
     """Upsert observed listing, never reopening an explicitly SOLD vehicle."""
     item = _normalize(data)
     now = timestamp()
-    with conn:
+    with nullcontext(conn):
         existing = conn.execute("SELECT vin,availability,source_observed_at FROM vehicles WHERE stock_number=?",
                                 (item["stock_number"],)).fetchone()
         if existing and existing["vin"] != item["vin"]:
@@ -122,7 +123,7 @@ def set_sold(conn: sqlite3.Connection, stock_number: str, sold: bool, actor: str
     stock = stock_number.strip().upper()
     new_status = "SOLD" if sold else "AVAILABLE"
     now = timestamp()
-    with conn:
+    with nullcontext(conn):
         current = conn.execute("SELECT stock_number FROM vehicles WHERE stock_number=?", (stock,)).fetchone()
         if not current:
             raise KeyError("Unknown stock number")
