@@ -17,6 +17,8 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, field_validator
+from inventory_registry import init_inventory, observe_listing, set_sold, get_vehicle, list_vehicles
+from vehicle_page import render_vehicle
 
 BASE_DIR = Path(__file__).resolve().parent
 VOLUME_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
@@ -110,12 +112,32 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone_normalized)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_vehicle ON leads(vehicle_vin)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_events_status ON engine_events(status, created_at)")
+        init_inventory(conn)
 
 
 init_db()
 
 
+class InventoryIn(BaseModel):
+    stock_number: str
+    vin: str
+    year: int
+    make: str
+    model: str
+    trim: str = ""
+    price: int | None = None
+    mileage: int | None = None
+    vehicle_url: str
+    source_observed_at: str | None = None
+
+
+class SoldIn(BaseModel):
+    sold: bool
+
+
 class LeadIn(BaseModel):
+    stock_number: str = Field(min_length=2, max_length=32)
+
     first_name: str = Field(min_length=1, max_length=60)
     last_name: str = Field(min_length=1, max_length=60)
     phone: str = Field(min_length=7, max_length=30)
@@ -203,26 +225,30 @@ async def security_headers(request: Request, call_next):
 
 @app.get("/", response_class=HTMLResponse)
 def root() -> HTMLResponse:
-    return HTMLResponse('<a href="/v/JR270624">Open Tahoe lead page</a>')
+    return HTMLResponse('<h1>Vehicle inquiries</h1><p>Visit a verified vehicle link at /v/STOCK_NUMBER.</p>')
 
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "stock_number": VEHICLE["stock_number"]}
+    return {"ok": True, "inventory": "database"}
 
 
 @app.get("/v/{stock_number}")
 def vehicle_page(stock_number: str) -> FileResponse:
-    if stock_number.upper() != VEHICLE["stock_number"]:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
-    return FileResponse(BASE_DIR / "index.html")
+    with db() as conn:
+        vehicle = get_vehicle(conn, stock_number)
+    if vehicle is None or vehicle["availability"] != "AVAILABLE":
+        raise HTTPException(status_code=404, detail="Vehicle not available for new inquiries")
+    return HTMLResponse(render_vehicle(vehicle), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/vehicle/{stock_number}")
 def vehicle_data(stock_number: str) -> dict[str, Any]:
-    if stock_number.upper() != VEHICLE["stock_number"]:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
-    return VEHICLE
+    with db() as conn:
+        vehicle = get_vehicle(conn, stock_number)
+    if not vehicle or vehicle["availability"] != "AVAILABLE":
+        raise HTTPException(status_code=404, detail="Vehicle not available")
+    return vehicle
 
 
 @app.post("/api/leads")
@@ -234,18 +260,22 @@ def create_lead(payload: LeadIn, request: Request) -> JSONResponse:
 
     ip = client_ip(request)
     enforce_rate_limit(ip)
+    with db() as conn:
+        vehicle = get_vehicle(conn, payload.stock_number)
+    if not vehicle or vehicle["availability"] != "AVAILABLE":
+        raise HTTPException(status_code=409, detail="Vehicle is no longer available for new inquiries")
     phone_normalized = normalize_phone(payload.phone)
     now = datetime.now(timezone.utc)
     created_at = now.isoformat()
     duplicate_cutoff = (now - timedelta(minutes=15)).isoformat()
-    vehicle_name = f'{VEHICLE["year"]} {VEHICLE["make"]} {VEHICLE["model"]} {VEHICLE["trim"]}'
+    vehicle_name = f'{vehicle["year"]} {vehicle["make"]} {vehicle["model"]} {vehicle["trim"]}'.strip()
 
     with db() as conn:
         existing = conn.execute(
             """SELECT id FROM leads
                WHERE phone_normalized=? AND vehicle_vin=? AND created_at>=?
                ORDER BY created_at DESC LIMIT 1""",
-            (phone_normalized, VEHICLE["vin"], duplicate_cutoff),
+            (phone_normalized, vehicle["vin"], duplicate_cutoff),
         ).fetchone()
 
         if existing:
@@ -279,7 +309,7 @@ def create_lead(payload: LeadIn, request: Request) -> JSONResponse:
             payload.phone.strip(), phone_normalized, str(payload.email).strip().lower(),
             payload.zip_code.strip(), payload.trade_status, payload.preferred_contact,
             int(payload.consent_contact), int(payload.consent_marketing),
-            CONSENT_VERSION, created_at, ip, VEHICLE["vin"], VEHICLE["stock_number"],
+            CONSENT_VERSION, created_at, ip, vehicle["vin"], vehicle["stock_number"],
             vehicle_name, source, medium, campaign, creative, clean(payload.utm_id,150),
             clean(payload.utm_term,150), clean(payload.fbclid,500), clean(payload.gclid,500),
             clean(payload.referrer,500), clean(payload.landing_url,1200),
@@ -293,7 +323,7 @@ def create_lead(payload: LeadIn, request: Request) -> JSONResponse:
             "email": str(payload.email).strip().lower(),
             "trade_status": payload.trade_status,
             "preferred_contact": payload.preferred_contact,
-            "vehicle": VEHICLE,
+            "vehicle": vehicle,
             "source": source,
             "campaign": campaign,
             "creative": creative,
@@ -305,7 +335,7 @@ def create_lead(payload: LeadIn, request: Request) -> JSONResponse:
         INSERT INTO engine_events
         (id,created_at,event_type,lead_id,vehicle_vin,status,payload_json)
         VALUES (?,?,'LEAD_CAPTURED',?,?,'PENDING',?)
-        """, (event_id, created_at, lead_id, VEHICLE["vin"], json.dumps(event_payload)))
+        """, (event_id, created_at, lead_id, vehicle["vin"], json.dumps(event_payload)))
 
     return JSONResponse({
         "ok": True,
@@ -314,8 +344,8 @@ def create_lead(payload: LeadIn, request: Request) -> JSONResponse:
         "opportunity_status": "NEW",
         "next_action": "FIRST_CONTACT",
         "vehicle": {
-            "vin": VEHICLE["vin"],
-            "stock_number": VEHICLE["stock_number"],
+            "vin": vehicle["vin"],
+            "stock_number": vehicle["stock_number"],
             "name": vehicle_name,
         },
     }, status_code=201)
@@ -363,3 +393,41 @@ def export_leads(authorization: str | None = Header(default=None)) -> StreamingR
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=leads.csv"},
     )
+
+
+@app.get("/api/vehicles")
+def public_vehicles() -> list[dict[str, Any]]:
+    with db() as conn:
+        rows = list_vehicles(conn)
+    return [{"stock_number": v["stock_number"], "vin": v["vin"],
+             "year": v["year"], "make": v["make"], "model": v["model"],
+             "trim": v["trim"], "vehicle_url": v["vehicle_url"],
+             "landing_url": f'/v/{v["stock_number"]}'} for v in rows]
+
+
+@app.get("/api/admin/inventory")
+def admin_inventory(authorization: str | None = Header(default=None)) -> list[dict[str, Any]]:
+    require_admin(authorization)
+    with db() as conn:
+        return list_vehicles(conn, include_sold=True)
+
+
+@app.post("/api/admin/inventory")
+def admin_observe_vehicle(payload: InventoryIn, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    require_admin(authorization)
+    try:
+        with db() as conn:
+            return observe_listing(conn, payload.model_dump(exclude_none=True))
+    except (ValueError, KeyError, sqlite3.IntegrityError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/admin/inventory/{stock_number}/status")
+def admin_set_vehicle_status(stock_number: str, payload: SoldIn,
+                            authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    require_admin(authorization)
+    try:
+        with db() as conn:
+            return set_sold(conn, stock_number, payload.sold, actor="authorized_admin")
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
