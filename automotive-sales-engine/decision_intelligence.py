@@ -12,8 +12,7 @@ ALLOWED = {"vehicle_identity", "availability", "advertised_price",
            "total_price", "condition", "buyer_timing", "buyer_budget",
            "financing_preference", "trade", "delivery"}
 DEALER_FACTS = {"availability", "advertised_price", "total_price", "condition"}
-MAX_AGE = {"availability": timedelta(hours=4),
-           "advertised_price": timedelta(hours=24),
+MAX_AGE = {"advertised_price": timedelta(hours=24),
            "total_price": timedelta(hours=24),
            "condition": timedelta(days=14)}
 ACTIONS = {
@@ -89,8 +88,12 @@ def decision_packet(stock_number: str, evidence: list[Evidence],
             "value": item.value if item and status == "verified" else None,
         }
     blockers = [field for field in ORDER if statuses[field]["status"] != "verified"]
+    if statuses["availability"]["status"] == "verified" and statuses["availability"]["value"] is False:
+        blockers.insert(0, "vehicle_sold")
     next_field = blockers[0] if blockers else None
-    action = ACTIONS[next_field] if next_field else ("REVIEW_DEAL", "Review the approved deal with the buyer")
+    action = (("STOP_PROMOTION", "Stop new promotion and notify the salesperson about existing buyers")
+              if next_field == "vehicle_sold" else ACTIONS[next_field]
+              if next_field else ("REVIEW_DEAL", "Review the approved deal with the buyer"))
     safe_to_quote_price = (statuses["advertised_price"]["status"] == "verified"
                            and statuses["total_price"]["status"] == "verified")
     safe_to_claim_available = (statuses["availability"]["status"] == "verified"
