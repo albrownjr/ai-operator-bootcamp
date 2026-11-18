@@ -137,9 +137,29 @@ class SalesCriticalControls(unittest.TestCase):
         self.assertEqual(self.client.get("/api/admin/metrics/funnel",
                              headers=self.auth).json()["overall"]["sold_delivered"],0)
 
+    def test_baseline_requires_source_proof_and_does_not_claim_lift(self):
+        baseline={"start_day":"2026-09-01","end_day":"2026-09-30",
+          "lead_source":"DealerCenter report - third party",
+          "leads":80,"contacted":60,"quotes":20,"sold":5,
+          "evidence_reference":"Manager-approved monthly report placeholder (synthetic test)",
+          "recorded_by":"Synthetic operator"}
+        created=self.client.post("/api/admin/metrics/baselines",
+                     json=baseline,headers=self.auth)
+        self.assertEqual(created.status_code,200,created.text)
+        records=self.client.get("/api/admin/metrics/baselines",headers=self.auth)
+        self.assertEqual(records.status_code,200)
+        self.assertEqual(records.json()[0]["sold"],5)
+        invalid=dict(baseline,sold=81)
+        self.assertEqual(self.client.post("/api/admin/metrics/baselines",
+                     json=invalid,headers=self.auth).status_code,422)
+        funnel=self.client.get("/api/admin/metrics/funnel",headers=self.auth).json()
+        self.assertIsNone(funnel["incremental_sales_attribution"])
+        self.assertIsNone(funnel["baseline"])
+
     def test_metrics_and_tasks_are_admin_only(self):
         self.assertEqual(self.client.get("/api/admin/metrics/funnel").status_code,401)
         self.assertEqual(self.client.get("/api/admin/tasks/due").status_code,401)
+        self.assertEqual(self.client.get("/api/admin/metrics/baselines").status_code,401)
 
 if __name__=="__main__":
     unittest.main()
