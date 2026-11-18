@@ -296,6 +296,13 @@ def create_lead(payload: LeadIn, request: Request) -> JSONResponse:
     vehicle_name = f'{vehicle["year"]} {vehicle["make"]} {vehicle["model"]} {vehicle["trim"]}'.strip()
 
     with db() as conn:
+        # Serialize stock-status verification and lead intake so an explicit
+        # SOLD operation cannot race a fresh vehicle inquiry.
+        conn.execute("BEGIN IMMEDIATE")
+        latest_vehicle = get_vehicle(conn, payload.stock_number)
+        if not latest_vehicle or latest_vehicle["availability"] != "AVAILABLE":
+            raise HTTPException(status_code=409, detail="Vehicle is no longer available for new inquiries")
+        vehicle = latest_vehicle
         existing = conn.execute(
             """SELECT id FROM leads
                WHERE phone_normalized=? AND vehicle_vin=? AND created_at>=?
