@@ -49,3 +49,4 @@ jobs:
           test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18000/api/admin/leads)" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18000/v/UNKNOWN)" = 404
           curl -fsS -H 'Authorization: Bearer ci-operator-only' http://127.0.0.1:18000/api/admin/metrics/funnel | python -c 'import json,sys;x=json.load(sys.stdin);assert x["scope"]=="THIS_APPLICATION_ONLY" and x["overall"]["leads"]==0'
+          ALLOW_SYNTHETIC_SMOKE=1 python automotive-sales-engine/smoke_test_live.py
