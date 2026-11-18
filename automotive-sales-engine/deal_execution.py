@@ -204,8 +204,10 @@ def deal_packet(conn: sqlite3.Connection, lead_id: str) -> dict:
     outcome = conn.execute("SELECT outcome,recorded_at FROM deal_outcomes WHERE lead_id=?",(lead_id,)).fetchone()
     tasks = lead_tasks(conn,lead_id)
     due = [t for t in tasks if t["computed_status"] in ("DUE_TODAY","OVERDUE")]
-    if due and not outcome:
-        task = due[0]
+    mandatory_crm = [t for t in due if t["source"] == "CRM_MANUAL"]
+    prioritized = mandatory_crm or ([] if action["code"] == "REVIEW_SOLD_VEHICLE" else due)
+    if prioritized and not outcome:
+        task = prioritized[0]
         task_action = task["required_action"]
         priority_code = ("FIRST_CONTACT" if task_action == "PERSONAL_CALL" and
                          not events else task_action)
