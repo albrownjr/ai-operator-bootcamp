@@ -2,6 +2,8 @@ const form=document.getElementById('leadForm');
 const statusBox=document.getElementById('formStatus');
 const submitButton=document.getElementById('submitButton');
 const params=new URLSearchParams(window.location.search);
+const stockNumber=document.body.dataset.stock;
+
 
 function tracking(){
   return{
@@ -25,6 +27,7 @@ form.addEventListener('submit',async(event)=>{
 
   const data=new FormData(form);
   const payload={
+    stock_number:stockNumber,
     first_name:data.get('first_name'),
     last_name:data.get('last_name'),
     phone:data.get('phone'),
@@ -52,7 +55,7 @@ form.addEventListener('submit',async(event)=>{
 
     form.reset();
     statusBox.className='form-status success';
-    statusBox.innerHTML='<strong>Request received.</strong> Your inquiry is attached to this exact Tahoe.';
+    statusBox.innerHTML='<strong>Request received.</strong> Your inquiry is attached to this exact vehicle.';
     submitButton.textContent='REQUEST RECEIVED';
 
     window.dispatchEvent(new CustomEvent('vehicleLeadCaptured',{detail:result}));
@@ -60,6 +63,6 @@ form.addEventListener('submit',async(event)=>{
     statusBox.className='form-status error';
     statusBox.textContent=error.message||'Something went wrong.';
     submitButton.disabled=false;
-    submitButton.textContent='CHECK AVAILABILITY';
+    submitButton.textContent='REQUEST VEHICLE DETAILS';
   }
 });
