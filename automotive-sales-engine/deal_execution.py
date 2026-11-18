@@ -78,7 +78,7 @@ def record_event(conn: sqlite3.Connection, lead_id: str, payload: dict[str, Any]
     if actor=="customer" and source=="workflow":
         raise ValueError("Automated workflow cannot be the source of customer statements")
     with conn:
-        lead = conn.execute("SELECT id FROM leads WHERE id=?",(lead_id,)).fetchone()
+        lead = conn.execute("SELECT id,preferred_contact,stock_number FROM leads WHERE id=?",(lead_id,)).fetchone()
         if not lead:
             raise KeyError("Unknown lead")
         prior = conn.execute("SELECT id,event_type FROM deal_history WHERE lead_id=? AND idempotency_key=?",
@@ -101,7 +101,10 @@ def record_event(conn: sqlite3.Connection, lead_id: str, payload: dict[str, Any]
             conn.execute("UPDATE leads SET opportunity_status=?, next_action='NONE' WHERE id=?",
                          (outcome,lead_id))
         else:
-            action = next_action(timeline(conn,lead_id))
+            action = next_action(timeline(conn,lead_id),dict(lead))
+            vehicle = conn.execute("SELECT availability FROM vehicles WHERE stock_number=?", (lead["stock_number"],)).fetchone()
+            if vehicle and vehicle["availability"]=="SOLD":
+                action = {"stage":"INTERESTED","code":"REVIEW_SOLD_VEHICLE"}
             conn.execute("UPDATE leads SET opportunity_status=?,next_action=? WHERE id=?",
                          (action["stage"],action["code"],lead_id))
     return {"event_id":ident,"duplicate":False}
