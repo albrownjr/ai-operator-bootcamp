@@ -47,7 +47,7 @@ Statuses describe **source-level implementation**, not production readiness. A G
 
 **Changed:** `deal_execution.py` now requires management-recorded price approval before a quote can be logged as sent, a sent quote before acceptance, buyer quote acceptance before purchase confirmation, and purchase confirmation before delivery. Event timestamps must respect these dependencies, and the latest buyer quote objection/decline blocks purchase/delivery until buyer acceptance is recorded again. No automatic lender approval is inferred.
 
-**Residual risk:** the single shared admin token and user-entered `actor_type=management` do NOT authenticate a manager's identity or validate a dealer-generated approval document. A production-grade approval workflow is still required.
+**Additional safeguard:** management events now require a distinct `MANAGEMENT_TOKEN` in addition to normal admin authorization; a missing or matching operator/manager secret fails closed. **Residual risk:** shared credentials still do not authenticate an individual manager or validate a dealer-generated approval document. Strong identity controls and approval reconciliation remain future requirements.
 
 ### 2. Incomplete follow-up enforcement
 **Previously:** there was only a suggested text after an unanswered call; due CRM tasks and actual same-day attempt requirements were not modeled.
@@ -84,7 +84,7 @@ Statuses describe **source-level implementation**, not production readiness. A G
 
 - [ ] CI passes all `test_inventory_registry.py`, `test_decision_intelligence.py`, `test_deal_execution.py`, `test_critical_controls.py`
 - [ ] Conduct actual cloud smoke test, including auth failure, duplicate lead, sold stock, contact/task status, and legal consent flow
-- [ ] Establish secure, long random admin token, persistent storage, backups, authorization and stronger permission separation for management approvals
+- [ ] Establish separate long random ADMIN_TOKEN and MANAGEMENT_TOKEN, persistent storage, backups, and individual identity/approval reconciliation for management decisions
 - [ ] Obtain dealership sign-off on advertised total prices, actual vehicle photos, privacy/consent and financing/remote deal workflows
 - [ ] Import/record approved currently listed inventory; no more stale Tahoe campaign assumptions
 - [ ] Determine reliable operational method to register/refresh website inventory
