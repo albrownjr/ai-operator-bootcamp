@@ -421,6 +421,34 @@ def admin_set_vehicle_status(stock_number: str, payload: SoldIn,
     require_admin(authorization)
     try:
         with db() as conn:
-            return set_sold(conn, stock_number, payload.sold, actor="authorized_admin")
+            before = get_vehicle(conn, stock_number)
+            if before is None:
+                raise KeyError("Unknown stock number")
+            updated = set_sold(conn, stock_number, payload.sold, actor="authorized_admin")
+            review_count = 0
+            if payload.sold and before["availability"] != "SOLD":
+                buyers = conn.execute(
+                    """SELECT id FROM leads WHERE vehicle_vin=?
+                       AND opportunity_status NOT IN ('SOLD','LOST')""",
+                    (updated["vin"],),
+                ).fetchall()
+                now = datetime.now(timezone.utc).isoformat()
+                for buyer in buyers:
+                    conn.execute(
+                        """INSERT INTO engine_events
+                           (id,created_at,event_type,lead_id,vehicle_vin,status,payload_json)
+                           VALUES (?,?,'VEHICLE_SOLD_REVIEW',?,?,'PENDING',?)""",
+                        (str(uuid.uuid4()),now,buyer["id"],updated["vin"],
+                         json.dumps({"stock_number":updated["stock_number"],
+                            "next_action":"REVIEW_SOLD_VEHICLE",
+                            "human_approval_required":True})),
+                    )
+                conn.execute(
+                    """UPDATE leads SET next_action='REVIEW_SOLD_VEHICLE'
+                       WHERE vehicle_vin=? AND opportunity_status NOT IN ('SOLD','LOST')""",
+                    (updated["vin"],),
+                )
+                review_count = len(buyers)
+            return {**updated, "affected_leads_for_review": review_count}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
