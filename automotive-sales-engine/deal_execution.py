@@ -75,7 +75,7 @@ def record_event(conn: sqlite3.Connection, lead_id: str, payload: dict[str, Any]
         raise ValueError("Event field too long")
     when = parse_timestamp(occurred)
     now = datetime.now(timezone.utc)
-    if when>now+timedelta(minutes=2):
+    if when>now:
         raise ValueError("Future events are not allowed")
     if actor=="customer" and source=="workflow":
         raise ValueError("Automated workflow cannot be the source of customer statements")
