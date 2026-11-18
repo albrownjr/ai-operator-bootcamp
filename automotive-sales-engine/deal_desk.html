@@ -22,6 +22,8 @@ button:disabled{opacity:.5}.secondary{background:#344252}a{color:#9fd1ff}
 <section class="panel"><label for="token">Admin token (kept in this tab only)</label>
 <div class="row"><input id="token" type="password" autocomplete="off" placeholder="Enter admin token">
 <button id="load">Load leads</button><a href="/admin" style="align-self:center">Inventory manager</a></div>
+<label for="managerToken">Separate manager credential (only used for verified manager events)</label>
+<input id="managerToken" type="password" autocomplete="off" placeholder="Required for finance/price/purchase/delivery approvals">
 <p id="status" role="status"></p></section>
 <section class="panel"><div class="row"><h2>Sales execution pulse</h2><button id="refreshMetrics" class="secondary" type="button">Refresh pulse</button></div>
 <div id="metrics" class="sub">Load leads to view recorded funnel metrics.</div>
