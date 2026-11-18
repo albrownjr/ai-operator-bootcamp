@@ -31,6 +31,7 @@ DEFAULT_DB = Path(VOLUME_DIR) / "leads.db" if VOLUME_DIR else BASE_DIR / "leads.
 DB_PATH = Path(os.getenv("LEADS_DB_PATH", str(DEFAULT_DB)))
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "").strip()
 MANAGEMENT_TOKEN = os.getenv("MANAGEMENT_TOKEN", "").strip()
+LEAD_INTAKE_ENABLED = os.getenv("LEAD_INTAKE_ENABLED", "true").strip().lower() == "true"
 CONSENT_VERSION = "2026-09-25-v1"
 
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -256,7 +257,7 @@ def root() -> HTMLResponse:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "inventory": "database"}
+    return {"ok": True, "inventory": "database", "lead_intake_enabled": LEAD_INTAKE_ENABLED}
 
 
 @app.get("/v/{stock_number}")
@@ -279,6 +280,8 @@ def vehicle_data(stock_number: str) -> dict[str, Any]:
 
 @app.post("/api/leads")
 def create_lead(payload: LeadIn, request: Request) -> JSONResponse:
+    if not LEAD_INTAKE_ENABLED:
+        raise HTTPException(status_code=503, detail="Live lead intake is disabled until operational launch")
     if payload.website:
         return JSONResponse({"ok": True, "lead_id": None})
     if not payload.consent_contact:
