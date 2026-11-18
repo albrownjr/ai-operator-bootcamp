@@ -5,6 +5,11 @@ on:
     paths:
       - 'automotive-sales-engine/**'
       - '.github/workflows/automotive-decision-tests.yml'
+  pull_request:
+    branches: [automotive-sales-engine]
+    paths:
+      - 'automotive-sales-engine/**'
+      - '.github/workflows/automotive-decision-tests.yml'
   workflow_dispatch:
 jobs:
   sales-tests:
