@@ -29,6 +29,26 @@ button:disabled{opacity:.5}.secondary{background:#344252}a{color:#9fd1ff}
 <div id="metrics" class="sub">Load leads to view recorded funnel metrics.</div>
 <div id="dueSummary" class="sub"></div>
 <p class="sub">Internal app data only. Not a DealerCenter sales report or proof of incremental sales.</p></section>
+<section class="panel"><h2>Record historical sales baseline</h2>
+<p class="sub">Enter only measured dealership figures from a named report. This is a reference record, not an automatic improvement claim.</p>
+<form id="baselineForm">
+<div class="row">
+<div><label>Period start<input name="start_day" type="date" required></label></div>
+<div><label>Period end<input name="end_day" type="date" required></label></div>
+<div><label>Lead source / cohort<input name="lead_source" required maxlength="100" placeholder="e.g. all internet leads"></label></div>
+</div>
+<div class="row">
+<div><label>Leads<input name="leads" type="number" min="0" required></label></div>
+<div><label>Personally contacted<input name="contacted" type="number" min="0" required></label></div>
+<div><label>Quotes<input name="quotes" type="number" min="0" required></label></div>
+<div><label>Delivered sales<input name="sold" type="number" min="0" required></label></div>
+</div>
+<div class="row">
+<div><label>Report / source reference<input name="evidence_reference" maxlength="500" required></label></div>
+<div><label>Recorded by<input name="recorded_by" maxlength="120" required></label></div>
+</div>
+<button type="submit">Save evidence-referenced baseline</button>
+</form><p id="baselineStatus" class="sub" role="status"></p></section>
 <div class="layout">
 <section class="panel"><h2>Buyer opportunities</h2><div id="leads"><p class="empty">Load leads to begin.</p></div></section>
 <div>
