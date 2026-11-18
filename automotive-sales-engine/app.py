@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from inventory_registry import init_inventory, observe_listing, set_sold, get_vehicle, list_vehicles
 from vehicle_page import render_vehicle
+from sales_orchestrator import first_contact_plan
 
 BASE_DIR = Path(__file__).resolve().parent
 VOLUME_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
@@ -329,6 +330,10 @@ def create_lead(payload: LeadIn, request: Request) -> JSONResponse:
             "creative": creative,
             "opportunity_status": "NEW",
             "next_action": "FIRST_CONTACT",
+            "sales_plan": first_contact_plan({
+                "preferred_contact": payload.preferred_contact,
+                "trade_status": payload.trade_status,
+            }, vehicle),
         }
 
         conn.execute("""
