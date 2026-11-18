@@ -21,6 +21,7 @@ from inventory_registry import init_inventory, observe_listing, set_sold, get_ve
 from vehicle_page import render_vehicle
 from sales_orchestrator import first_contact_plan
 from deal_execution import init_deal_execution, record_event, deal_packet
+from followup_tasks import init_tasks, create_task, cancel_task, lead_tasks, due_queue
 
 BASE_DIR = Path(__file__).resolve().parent
 VOLUME_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
@@ -99,6 +100,7 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_events_status ON engine_events(status, created_at)")
         init_inventory(conn)
         init_deal_execution(conn)
+        init_tasks(conn)
 
 
 init_db()
@@ -119,6 +121,18 @@ class InventoryIn(BaseModel):
 
 class SoldIn(BaseModel):
     sold: bool
+
+
+class FollowupTaskIn(BaseModel):
+    due_at: str
+    objective: str = Field(min_length=3,max_length=500)
+    source: str = "CRM_MANUAL"
+    channel_policy: str = "CALL_TEXT"
+    external_reference: str | None = None
+
+
+class CancelFollowupIn(BaseModel):
+    reason: str = Field(min_length=2,max_length=500)
 
 
 class DealEventIn(BaseModel):
@@ -331,6 +345,10 @@ def create_lead(payload: LeadIn, request: Request) -> JSONResponse:
             }, vehicle),
         }
 
+        create_task(conn,lead_id,created_at,
+                    "Make prompt personal contact about the selected vehicle; call then contextual text if unanswered and permitted",
+                    source="ENGINE",policy="CALL_TEXT")
+
         conn.execute("""
         INSERT INTO engine_events
         (id,created_at,event_type,lead_id,vehicle_vin,status,payload_json)
@@ -489,6 +507,49 @@ def admin_record_deal_event(lead_id: str, payload: DealEventIn,
         with db() as conn:
             result = record_event(conn, lead_id, payload.model_dump())
             return {**result, "deal": deal_packet(conn, lead_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/admin/tasks/due")
+def admin_due_tasks(authorization: str | None = Header(default=None)) -> list[dict[str, Any]]:
+    require_admin(authorization)
+    with db() as conn:
+        return due_queue(conn)
+
+
+@app.get("/api/admin/leads/{lead_id}/tasks")
+def admin_lead_tasks(lead_id: str, authorization: str | None = Header(default=None)) -> list[dict[str, Any]]:
+    require_admin(authorization)
+    with db() as conn:
+        if not conn.execute("SELECT id FROM leads WHERE id=?", (lead_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Lead not found")
+        return lead_tasks(conn, lead_id)
+
+
+@app.post("/api/admin/leads/{lead_id}/tasks")
+def admin_create_task(lead_id: str, payload: FollowupTaskIn,
+                      authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    require_admin(authorization)
+    try:
+        with db() as conn:
+            return create_task(conn,lead_id,payload.due_at,payload.objective,
+                               payload.source,payload.channel_policy,payload.external_reference)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/admin/tasks/{task_id}/cancel")
+def admin_cancel_task(task_id: str,payload: CancelFollowupIn,
+                      authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    require_admin(authorization)
+    try:
+        with db() as conn:
+            return cancel_task(conn,task_id,payload.reason)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
