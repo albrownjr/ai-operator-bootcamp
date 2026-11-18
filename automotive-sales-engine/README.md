@@ -59,6 +59,20 @@ Protected operator desk: `GET /deal-desk`, after deployment. Enter the admin tok
 ## First-contact sales plan
 Capture interest alone does not establish purchase intent, vehicle-condition acceptance, or an approved deal. The plan asks one motivation question first, then moves to timeline and financial information when appropriate, without re-asking known facts. It is an internal action plan—not an automatic customer message. The owner's call + contextual SMS standard applies for CRM tasks due when permitted.
 
+## Follow-up, chronology, and sales measurement controls
+
+- New website leads automatically receive an `ENGINE` first-contact task. Actual CRM follow-up tasks are **not synchronized**; enter them manually through `/deal-desk` with an external reference, real due timestamp, and permitted contact policy.
+- `GET /api/admin/tasks/due` shows unresolved due/overdue tasks; `GET/POST /api/admin/leads/{lead_id}/tasks` manages lead-specific entered tasks; `POST /api/admin/tasks/{task_id}/cancel` records cancellation reason. Cancellation in this engine does **not** modify DealerCenter.
+- CALL_TEXT tasks require a documented personal call plus contextual text unless a meaningful phone conversation is documented. Automated workflow messages do not satisfy tasks. `FULFILLED_LATE` is distinct from timely completion.
+- Buyer statements and contact attempts carry actual timezone-aware timestamps and separate recorded times. Duplicate idempotency keys may not rewrite prior statements.
+- A confirmed sale requires causal management price approval → sent quote → explicit buyer acceptance → management purchase confirmation → recorded delivery, in timestamp order. A later unresolved buyer concern blocks purchase confirmation; condition/quote objections cannot disappear through unrelated statements.
+- Terminal outcomes cancel only ENGINE-owned open tasks. CRM_MANUAL tasks remain visible for dealership CRM reconciliation.
+- `GET /api/admin/metrics/funnel` provides recorded app-only lead-to-contact/quote/delivered-SOLD and per-source counts and timing, with **no fabricated baseline or incremental sales attribution**.
+- `GET/POST /api/admin/metrics/baselines` stores append-only, manually entered historical baseline records with dates, source, counts and evidence reference. It does not verify the historical data or automatically claim that results improved.
+- Transactions including new lead + engine task + capture event, SOLD status + affected buyer review events, and deal events + state updates are intended to commit as units; regression and runtime testing are required before production claims.
+
+**Accuracy limitations:** A shared admin token does not verify manager identity or external quote approval. Event evidence is manually entered and could be inaccurate. CRM due-task lists are incomplete until manually registered. Financial terms, lending approvals and delivery are not executed by this software.
+
 ## Deployment
 Source: `albrownjr/ai-operator-bootcamp`, branch `automotive-sales-engine`, service root `/automotive-sales-engine`.
 
@@ -72,7 +86,7 @@ On a production-capable Railway account or equivalent:
 **Deployment blocker from last attempt:** Railway trial expired; no Railway project or live URL was created. A paid hosting plan or alternative hosting authorization is required. A runtime restart **without** a persistent volume will lose leads.
 
 ## Tests
-`python -m unittest -v test_inventory_registry.py test_decision_intelligence.py test_deal_execution.py`
+`python -m unittest -v test_inventory_registry.py test_decision_intelligence.py test_deal_execution.py test_critical_controls.py`
 Integration tests require packages from `requirements.txt` plus `httpx`. GitHub Actions test configuration is present; success must be confirmed from workflow logs. No test pass is claimed from a mere commit.
 
 ## Production safety gates
