@@ -109,6 +109,22 @@ class SalesCriticalControls(unittest.TestCase):
         crm=[t for t in self.packet()["tasks"] if t["source"]=="CRM_MANUAL"][0]
         self.assertEqual(crm["computed_status"],"FULFILLED")
 
+    def test_overdue_task_can_be_completed_late_without_erasing_missed_day(self):
+        past=datetime.now(timezone.utc)-timedelta(days=3)
+        task={"due_at":past.isoformat(),"objective":"Respond to actual buyer question",
+              "source":"CRM_MANUAL","external_reference":"late-task-8",
+              "channel_policy":"CALL_TEXT"}
+        r=self.client.post(f"/api/admin/leads/{self.lead}/tasks",json=task,headers=self.auth)
+        self.assertEqual(r.status_code,200,r.text)
+        original=[t for t in self.packet()["tasks"] if t["external_reference"]=="late-task-8"][0]
+        self.assertEqual(original["computed_status"],"OVERDUE")
+        today=datetime.now(timezone.utc).isoformat()
+        self.assertEqual(self.event("CALL_ATTEMPTED",when=today).status_code,200)
+        self.assertEqual(self.event("TEXT_SENT",when=today).status_code,200)
+        updated=[t for t in self.packet()["tasks"] if t["external_reference"]=="late-task-8"][0]
+        self.assertEqual(updated["computed_status"],"FULFILLED_LATE")
+        self.assertEqual(updated["required_action"],"NONE")
+
     def test_funnel_does_not_invent_baseline(self):
         r=self.client.get("/api/admin/metrics/funnel",headers=self.auth)
         self.assertEqual(r.status_code,200,r.text)
