@@ -33,6 +33,11 @@ class DecisionPacketTests(unittest.TestCase):
         self.assertEqual(p["facts"]["availability"]["value"], False)
         self.assertFalse(p["guards"]["can_claim_available"])
 
+    def test_sold_vehicle_stops_promotion(self):
+        p = decision_packet("JR270624", [ev("availability", False)], NOW)
+        self.assertEqual(p["next_action"]["code"], "STOP_PROMOTION")
+        self.assertFalse(p["is_deal_ready"])
+
     def test_buyer_claim_requires_buyer_source(self):
         p = decision_packet("JR270624", [ev("buyer_timing", "tomorrow",
             verified_by="", buyer_stated=False)], NOW)
