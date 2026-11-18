@@ -115,6 +115,14 @@ class LeadIntegrationTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/leads",json=payload).status_code,409)
         self.assertEqual(self.client.post("/api/admin/inventory",json=listing(),headers=self.auth).json()["availability"],"SOLD")
         self.assertEqual(self.client.get("/api/vehicles").json(), [])
+        with self.db() as conn:
+            kinds = [x[0] for x in conn.execute(
+                "SELECT event_type FROM engine_events ORDER BY created_at, rowid").fetchall()]
+            action = conn.execute("SELECT next_action FROM leads").fetchone()[0]
+        self.assertCountEqual(kinds, ["LEAD_CAPTURED", "VEHICLE_SOLD_REVIEW"])
+        self.assertEqual(action, "REVIEW_SOLD_VEHICLE")
+        self.assertEqual(self.client.post("/api/admin/inventory/JR270624/status",
+                          json={"sold": True},headers=self.auth).json()["affected_leads_for_review"],0)
 
     def test_admin_required(self):
         self.assertEqual(self.client.post("/api/admin/inventory", json=listing()).status_code, 401)
