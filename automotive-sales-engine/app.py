@@ -20,6 +20,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from inventory_registry import init_inventory, observe_listing, set_sold, get_vehicle, list_vehicles
 from vehicle_page import render_vehicle
 from sales_orchestrator import first_contact_plan
+from deal_execution import init_deal_execution, record_event, deal_packet
 
 BASE_DIR = Path(__file__).resolve().parent
 VOLUME_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
@@ -97,6 +98,7 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_vehicle ON leads(vehicle_vin)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_events_status ON engine_events(status, created_at)")
         init_inventory(conn)
+        init_deal_execution(conn)
 
 
 init_db()
@@ -117,6 +119,16 @@ class InventoryIn(BaseModel):
 
 class SoldIn(BaseModel):
     sold: bool
+
+
+class DealEventIn(BaseModel):
+    event_type: str
+    actor_type: str
+    actor_name: str
+    occurred_at: str
+    source: str
+    statement: str
+    idempotency_key: str
 
 
 class LeadIn(BaseModel):
@@ -452,3 +464,27 @@ def admin_set_vehicle_status(stock_number: str, payload: SoldIn,
             return {**updated, "affected_leads_for_review": review_count}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/admin/leads/{lead_id}/deal")
+def admin_deal_packet(lead_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    require_admin(authorization)
+    try:
+        with db() as conn:
+            return deal_packet(conn, lead_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/admin/leads/{lead_id}/events")
+def admin_record_deal_event(lead_id: str, payload: DealEventIn,
+                            authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    require_admin(authorization)
+    try:
+        with db() as conn:
+            result = record_event(conn, lead_id, payload.model_dump())
+            return {**result, "deal": deal_packet(conn, lead_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
