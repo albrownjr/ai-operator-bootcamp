@@ -466,6 +466,11 @@ def admin_set_vehicle_status(stock_number: str, payload: SoldIn,
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@app.get("/deal-desk")
+def deal_desk() -> FileResponse:
+    return FileResponse(BASE_DIR / "deal_desk.html", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/admin/leads/{lead_id}/deal")
 def admin_deal_packet(lead_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
     require_admin(authorization)
