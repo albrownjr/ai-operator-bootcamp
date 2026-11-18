@@ -13,6 +13,7 @@ Every new inquiry produces an auditable `LEAD_CAPTURED` event with an exact stoc
 - Subsequent `observe_listing` operations update listing facts but **never** reopen a SOLD vehicle.
 - Unknown or SOLD vehicle pages respond 404; new lead submissions for SOLD vehicles respond 409.
 - Prior leads and attribution are retained after SOLD. Website observation timestamps and inventory status-change audit events are persisted.
+- On a new SOLD transition, existing leads receive a pending `VEHICLE_SOLD_REVIEW` event and a human-owned `REVIEW_SOLD_VEHICLE` next action. Repeating SOLD does not generate duplicate review events.
 - A vehicle is not registered unless its VIN, stock number and exact Extreme Autoplex HTTPS inventory URL have been supplied.
 - A registered listing is an operating inventory assumption, not a guarantee it remains available at transaction time.
 - Availability records are controlled by the stated owner inventory policy; price, condition, financing, total cost and approval are independent unverified facts until supported by authorized evidence.
@@ -27,7 +28,7 @@ Every new inquiry produces an auditable `LEAD_CAPTURED` event with an exact stoc
 - `GET /admin` — browser-based inventory operator UI (token provided in session/tab, not stored)
 - `GET /api/admin/inventory` — current and SOLD inventory
 - `POST /api/admin/inventory` — register/refresh website observation
-- `POST /api/admin/inventory/{stock_number}/status` — explicit SOLD or reactivation
+- `POST /api/admin/inventory/{stock_number}/status` — explicit SOLD or reactivation; response includes count of existing leads queued for review
 - `GET /api/admin/leads` / `GET /api/admin/leads.csv` / `GET /api/admin/stats` — protected lead operations
 
 Admin APIs require `Authorization: Bearer $ADMIN_TOKEN`; production fails closed if the token is unset.
