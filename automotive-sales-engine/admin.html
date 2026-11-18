@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inventory Operations</title>
+<style>body{font:16px system-ui;background:#0d1015;color:#f3f4f6;margin:0}main{max-width:960px;margin:auto;padding:24px}h1{font-size:28px}section{border:1px solid #39414b;padding:22px;border-radius:14px;margin:16px 0;background:#171d25}label{display:block;margin:12px 0;font-size:13px}input{background:#080c11;color:white;border:1px solid #56606e;border-radius:6px;padding:12px;width:100%;box-sizing:border-box;font:inherit}button{background:#ca2430;color:white;border:0;padding:12px 16px;border-radius:8px;cursor:pointer;font-weight:700}button:disabled{opacity:.5}button.secondary{background:#343c48}button.warn{background:#8b2430}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.item{padding:14px;border:1px solid #414b57;border-radius:9px;margin:9px 0}.muted{color:#a7b4c2;font-size:13px}.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.sold{color:#ff8792}#status{white-space:pre-wrap;color:#a7e9b2}</style></head><body><main>
+<h1>Inventory Operations</h1><p class="muted">Internal interface. No DealerCenter access. Add only vehicles you observe on the public Extreme Autoplex inventory website. A SOLD override persists until you explicitly reactivate the vehicle.</p>
+<section><label>Admin access token (kept only in this open tab)<input id="token" type="password" autocomplete="off"></label><button id="load">Load inventory</button><p id="status" role="status"></p></section>
+<section><h2>Record website listing</h2><form id="record"><div class="grid">
+<label>Stock number<input name="stock_number" required></label><label>VIN<input name="vin" required minlength="17" maxlength="17"></label>
+<label>Year<input name="year" type="number" min="1900" max="2100" required></label><label>Make<input name="make" required></label>
+<label>Model<input name="model" required></label><label>Trim<input name="trim"></label>
+<label>Website listed price (optional)<input name="price" type="number" min="0"></label><label>Mileage (optional)<input name="mileage" type="number" min="0"></label>
+</div><label>Exact Extreme Autoplex inventory URL<input name="vehicle_url" type="url" required placeholder="https://www.extremeautoplex.com/inventory/..."></label>
+<button type="submit">Save listing</button></form></section>
+<section><div class="row"><h2>Vehicle status</h2><button class="secondary" id="refresh">Refresh</button></div><div id="vehicles" aria-live="polite"><p class="muted">Load inventory to begin.</p></div></section>
+</main><script src="/static/admin.js"></script></body></html>
