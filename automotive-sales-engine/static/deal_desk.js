@@ -64,7 +64,24 @@ async function openDeal(id){
   }
  }catch(e){msg(e.message)}
 }
-g("load").onclick=load;
+async function refreshPulse(){
+ try{
+  const [metrics,due]=await Promise.all([
+    request("/api/admin/metrics/funnel"),request("/api/admin/tasks/due")]);
+  const m=metrics.overall;
+  g("metrics").textContent=
+    "Leads: "+m.leads+" · Personal contact: "+m.personally_contacted+
+    " · Quotes: "+m.quotes_presented+" · Delivered SOLD: "+m.sold_delivered+
+    " · Lost: "+m.lost+" · Lead-to-SOLD: "+
+    (m.lead_to_sold_pct===null?"N/A":m.lead_to_sold_pct+"%");
+  const overdue=due.filter(t=>t.computed_status==="OVERDUE");
+  const today=due.filter(t=>t.computed_status==="DUE_TODAY");
+  g("dueSummary").textContent="Recorded action queue: "+today.length+
+     " due today · "+overdue.length+" overdue. CRM tasks appear only if manually entered.";
+ }catch(e){msg(e.message)}
+}
+g("refreshMetrics").onclick=refreshPulse;
+g("load").onclick=async()=>{await load();await refreshPulse()};
 g("record").onsubmit=async e=>{
  e.preventDefault();if(!current)return;
  const data=Object.fromEntries(new FormData(e.target).entries());
