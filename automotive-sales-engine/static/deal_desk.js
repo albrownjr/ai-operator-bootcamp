@@ -24,7 +24,7 @@ async function load(){
 async function openDeal(id){
  try{
   const d=await request("/api/admin/leads/"+encodeURIComponent(id)+"/deal");
-  current=id;g("save").disabled=false;
+  current=id;g("save").disabled=false;g("taskSave").disabled=false;
   g("buyer").textContent=d.lead.first_name+" · "+d.lead.vehicle_name+" · "+d.lead.stock_number;
   const recommendation=g("recommendation");recommendation.replaceChildren();
   const stage=document.createElement("p");stage.className="stage";stage.textContent=d.recommendation.stage+" · "+d.recommendation.code;
@@ -32,6 +32,27 @@ async function openDeal(id){
   const reason=document.createElement("p");reason.className="sub";reason.textContent=d.recommendation.reason;
   recommendation.append(stage,objective,reason);
   if(d.outcome){const p=document.createElement("p");p.textContent="Recorded outcome: "+d.outcome.outcome;recommendation.append(p);g("save").disabled=true}
+  const tasksNode=g("tasks");tasksNode.replaceChildren();
+  for(const task of d.tasks||[]){
+    const row=document.createElement("div");row.className="event";
+    const title=document.createElement("strong");
+    title.textContent=task.source+" · "+task.computed_status+" · "+task.required_action;
+    const info=document.createElement("p");
+    info.textContent=task.objective+" · due "+task.due_local_day+" · "+task.channel_policy;
+    row.append(title,info);
+    if(task.status!=="CANCELLED" && task.computed_status!=="FULFILLED"){
+      const cancel=document.createElement("button");cancel.className="secondary";cancel.type="button";
+      cancel.textContent="Cancel in engine";
+      cancel.onclick=async()=>{
+        const reason=prompt("Why is the task cancelled? Update the real CRM separately.");
+        if(!reason)return;
+        try{await request("/api/admin/tasks/"+encodeURIComponent(task.id)+"/cancel",
+          {method:"POST",body:JSON.stringify({reason})});await openDeal(current);
+          msg("Engine task cancelled. Update the dealership CRM separately.")}catch(err){msg(err.message)}
+      };row.append(cancel);
+    }
+    tasksNode.append(row);
+  }
   const root=g("timeline");root.replaceChildren();
   if(!d.timeline.length){const p=document.createElement("p");p.textContent="No actual personal contact documented yet.";root.append(p)}
   for(const e of d.timeline){
@@ -57,4 +78,18 @@ g("record").onsubmit=async e=>{
   if(!result.duplicate){e.target.reset();g("occurred").value=""}
   await openDeal(current);await load();msg("Event saved with recorded and actual timestamps.");
  }catch(err){msg(err.message)}
+};
+g("taskForm").onsubmit=async event=>{
+  event.preventDefault();if(!current)return;
+  const form=event.currentTarget;
+  const data=Object.fromEntries(new FormData(form).entries());
+  const due=new Date(g("task_due").value);
+  if(Number.isNaN(due.getTime())){msg("Enter a valid CRM due time.");return}
+  data.due_at=due.toISOString();
+  data.source="CRM_MANUAL";
+  try{
+    await request("/api/admin/leads/"+encodeURIComponent(current)+"/tasks",
+      {method:"POST",body:JSON.stringify(data)});
+    form.reset();await openDeal(current);msg("CRM task recorded in this engine. DealerCenter was not changed.");
+  }catch(err){msg(err.message)}
 };
