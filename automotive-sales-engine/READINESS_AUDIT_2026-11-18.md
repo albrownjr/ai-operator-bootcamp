@@ -70,6 +70,16 @@ Statuses describe **source-level implementation**, not production readiness. A G
 
 **Residual risk:** no verified comparison baseline and no dealership-wide reconciliation. The report deliberately sets `baseline=null` and `incremental_sales_attribution=null`. It cannot yet prove that the software caused additional sales.
 
+## Additional quality repairs
+- Task status now distinguishes late fulfillment from same-day completion so an overdue task can be cleared honestly without erasing a missed due date.
+- A duplicate event idempotency key with different statement/source/actor/timestamp is rejected rather than silently replacing or accepting conflicting evidence.
+- Completing a deal cancels only the engine's own open first-contact tasks; explicitly entered CRM tasks require human reconciliation.
+- Database helpers no longer commit in the middle of enclosing lead/SOLD/deal workflows; the lead submission now rechecks stock status under a write lock before saving the lead.
+- `performance_baseline.py` adds append-only manual baselines with recorded dates, source, numerator/denominator counts and evidence reference. There is no auto-generated lift claim.
+- Deal desk now includes a recorded funnel pulse, due/overdue counts, and manual CRM task entry/review; no calls, SMS, emails or DealerCenter changes are performed.
+- `test_critical_controls.py` adds negative-path regression cases for phantom sales, event chronology, unresolved buyer concerns, CRM personal contact and reported funnel totals.
+- **Testing remains unverified** until the configured CI workflows return passing results and a deployed app passes end-to-end tests.
+
 ## Release gates — do not declare sales production ready without evidence
 
 - [ ] CI passes all `test_inventory_registry.py`, `test_decision_intelligence.py`, `test_deal_execution.py`, `test_critical_controls.py`
