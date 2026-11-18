@@ -18,6 +18,7 @@ class SalesCriticalControls(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory()
         os.environ["LEADS_DB_PATH"]=self.tmp.name+"/test.db"
         os.environ["ADMIN_TOKEN"]="integration-admin-token"
+        os.environ["MANAGEMENT_TOKEN"]="synthetic-manager-token"
         sys.modules.pop("app",None)
         import app
         self.db=app.db
@@ -55,13 +56,25 @@ class SalesCriticalControls(unittest.TestCase):
               "actor_name":"Recorded Test Actor","occurred_at":when,
               "source":"synthetic CRM evidence",
               "statement":text or etype,"idempotency_key":f"critical-{self.n}"}
+        headers={**self.auth,**({"X-Management-Token":"synthetic-manager-token"} if actor=="management" else {})}
         return self.client.post(f"/api/admin/leads/{self.lead}/events",
-                                json=body,headers=self.auth)
+                                json=body,headers=headers)
 
     def packet(self):
         r=self.client.get(f"/api/admin/leads/{self.lead}/deal",headers=self.auth)
         self.assertEqual(r.status_code,200,r.text)
         return r.json()
+
+    def test_manager_approval_requires_separate_credential(self):
+        self.n+=1
+        record={"event_type":"PRICE_APPROVED","actor_type":"management",
+          "actor_name":"Synthetic manager","occurred_at":datetime.now(timezone.utc).isoformat(),
+          "source":"approved quote reference","statement":"Synthetic approved pricing",
+          "idempotency_key":"unauthorized-manager-test"}
+        r=self.client.post(f"/api/admin/leads/{self.lead}/events",
+                json=record,headers=self.auth)
+        self.assertEqual(r.status_code,403,r.text)
+        self.assertEqual(len(self.packet()["timeline"]),0)
 
     def test_no_phantom_sale_without_purchase(self):
         self.assertEqual(self.event("DELIVERY_COMPLETED").status_code,422)
