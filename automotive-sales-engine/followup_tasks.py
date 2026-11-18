@@ -5,6 +5,7 @@ A CRM task must be explicitly entered/imported to be represented here.
 """
 from __future__ import annotations
 from datetime import datetime, timezone
+from contextlib import nullcontext
 from zoneinfo import ZoneInfo
 import sqlite3
 import uuid
@@ -50,7 +51,7 @@ def create_task(conn: sqlite3.Connection, lead_id: str, due_at: str,
         raise ValueError("CRM task requires an external reference")
     due=parse_due(due_at).isoformat()
     ident=str(uuid.uuid4())
-    with conn:
+    with nullcontext(conn):
         if not conn.execute("SELECT id FROM leads WHERE id=?",(lead_id,)).fetchone():
             raise KeyError("Unknown lead")
         try:
@@ -69,7 +70,7 @@ def create_task(conn: sqlite3.Connection, lead_id: str, due_at: str,
 
 def cancel_task(conn: sqlite3.Connection, task_id: str, reason: str) -> dict:
     if not reason.strip() or len(reason)>500: raise ValueError("Cancellation reason required")
-    with conn:
+    with nullcontext(conn):
         task=conn.execute("SELECT * FROM sales_tasks WHERE id=?",(task_id,)).fetchone()
         if not task: raise KeyError("Unknown task")
         if task["status"]=="CANCELLED": return dict(task)
