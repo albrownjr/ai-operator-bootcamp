@@ -114,3 +114,14 @@ g("taskForm").onsubmit=async event=>{
     form.reset();await openDeal(current);msg("CRM task recorded in this engine. DealerCenter was not changed.");
   }catch(err){msg(err.message)}
 };
+g("baselineForm").onsubmit=async event=>{
+ event.preventDefault();
+ const form=event.currentTarget;
+ const data=Object.fromEntries(new FormData(form).entries());
+ for(const field of ["leads","contacted","quotes","sold"]){data[field]=Number(data[field])}
+ try{
+  await request("/api/admin/metrics/baselines",{method:"POST",body:JSON.stringify(data)});
+  g("baselineStatus").textContent="Baseline recorded with source reference. No sales improvement has been assumed.";
+  form.reset();
+ }catch(e){g("baselineStatus").textContent=e.message}
+};
