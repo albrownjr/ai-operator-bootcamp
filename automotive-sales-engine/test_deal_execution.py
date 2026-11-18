@@ -94,11 +94,21 @@ class DealExecutionTests(unittest.TestCase):
         self.assertEqual(r.status_code,422)
 
     def test_duplicate_is_idempotent(self):
-        r=self.event("CALL_ATTEMPTED","salesperson",key="call-1")
+        t=(datetime.now(timezone.utc)-timedelta(minutes=1)).isoformat()
+        r=self.event("CALL_ATTEMPTED","salesperson",key="call-1",occurred_at=t)
         self.assertEqual(r.status_code,200,r.text)
-        again=self.event("CALL_ATTEMPTED","salesperson",key="call-1")
+        again=self.event("CALL_ATTEMPTED","salesperson",key="call-1",occurred_at=t)
         self.assertEqual(again.status_code,200)
         self.assertTrue(again.json()["duplicate"])
+        self.assertEqual(len(self.packet()["timeline"]),1)
+
+    def test_idempotency_key_cannot_rewrite_a_statement(self):
+        t=(datetime.now(timezone.utc)-timedelta(minutes=1)).isoformat()
+        self.assertEqual(self.event("CALL_ATTEMPTED","salesperson",key="call-fixed",
+                                    occurred_at=t,statement="No answer").status_code,200)
+        changed=self.event("CALL_ATTEMPTED","salesperson",key="call-fixed",
+                           occurred_at=t,statement="Talked for 20 minutes")
+        self.assertEqual(changed.status_code,422)
         self.assertEqual(len(self.packet()["timeline"]),1)
 
     def test_sold_inventory_overrides_deal_next_action(self):
