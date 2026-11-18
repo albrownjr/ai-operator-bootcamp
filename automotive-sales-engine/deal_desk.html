@@ -27,6 +27,21 @@ button:disabled{opacity:.5}.secondary{background:#344252}a{color:#9fd1ff}
 <section class="panel"><h2>Buyer opportunities</h2><div id="leads"><p class="empty">Load leads to begin.</p></div></section>
 <div>
 <section class="panel"><h2 id="buyer">Select an opportunity</h2><div id="recommendation" class="empty">The next action will appear here.</div></section>
+<section class="panel"><h2>CRM follow-up task (manual entry)</h2>
+<p class="sub">Enter only actual due CRM tasks. Automated CRM notifications do not count as personal contact.</p>
+<form id="taskForm">
+<label>CRM task reference<input name="external_reference" required maxlength="120" placeholder="CRM task ID or unique CRM reference"></label>
+<label>Contact objective<input name="objective" required maxlength="500" placeholder="Confirm buyer response to condition video"></label>
+<label>Task due date/time (local)<input id="task_due" type="datetime-local" required></label>
+<label>Permitted contact policy<select name="channel_policy">
+<option value="CALL_TEXT">Call + contextual text unless meaningful conversation</option>
+<option value="CALL_ONLY">Call only (specific permission/restriction)</option>
+<option value="TEXT_ONLY">Text only (specific permission/restriction)</option>
+<option value="EMAIL_ONLY">Email only (specific permission/restriction)</option>
+</select></label>
+<button type="submit" id="taskSave" disabled>Record CRM due task</button>
+</form>
+<div id="tasks" class="sub">No lead selected.</div></section>
 <section class="panel"><h2>Record a verified event</h2>
 <form id="record">
 <label>Event type<select name="event_type" id="event_type" required>
