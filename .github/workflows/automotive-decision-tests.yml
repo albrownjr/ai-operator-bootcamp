@@ -1,0 +1,20 @@
+name: Automotive Decision Intelligence Tests
+on:
+  push:
+    branches: [automotive-sales-engine]
+    paths:
+      - 'automotive-sales-engine/decision_intelligence.py'
+      - 'automotive-sales-engine/test_decision_intelligence.py'
+      - '.github/workflows/automotive-decision-tests.yml'
+  workflow_dispatch:
+jobs:
+  decision-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run decision intelligence regression tests
+        working-directory: automotive-sales-engine
+        run: python -m unittest -v test_decision_intelligence.py
