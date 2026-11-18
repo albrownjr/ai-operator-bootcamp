@@ -15,7 +15,7 @@ CUSTOMER = {"MOTIVATION_STATED","TIMELINE_STATED","FINANCING_STATED",
             "CONDITION_ACCEPTED","CONDITION_CONCERN","QUOTE_ACCEPTED",
             "QUOTE_CONCERN","BUYER_DECLINED","DELIVERY_PREFERENCE"}
 SALESPERSON = {"CALL_ATTEMPTED","TEXT_SENT","EMAIL_SENT","VIDEO_SENT",
-               "HISTORY_SENT","QUOTE_SENT","CREDIT_APPLICATION_INVITED",
+               "HISTORY_SENT","QUOTE_SENT","PHONE_CONVERSATION","CREDIT_APPLICATION_INVITED",
                "CREDIT_APPLICATION_RECEIVED","TRADE_DETAILS_COLLECTED",
                "DELIVERY_PLAN_PRESENTED"}
 MANAGEMENT = {"PRICE_APPROVED","TRADE_APPROVED","FINANCING_STRUCTURE_CONFIRMED",
@@ -136,6 +136,10 @@ def next_action(events: list[dict], lead: dict | None = None) -> dict:
         return {"stage":"NEW","code":"FIRST_CONTACT",
                 "objective":"Make a permitted personal contact attempt about the requested vehicle",
                 "reason":"No documented personal contact attempt"}
+    if lead and lead.get("preferred_contact") in {"call","text"} and "CALL_ATTEMPTED" in types and "PHONE_CONVERSATION" not in types and "TEXT_SENT" not in types:
+        return {"stage":"INTERESTED","code":"SEND_CONTEXTUAL_TEXT",
+                "objective":"After an unanswered personal call, send a permitted contextual personal text",
+                "reason":"Call without meaningful conversation does not complete call-plus-text follow-up"}
     if "MOTIVATION_STATED" not in types:
         return {"stage":"INTERESTED","code":"DISCOVER_MOTIVATION",
                 "objective":"Ask one natural question about the reason for purchasing",
@@ -178,6 +182,11 @@ def deal_packet(conn: sqlite3.Connection, lead_id: str) -> dict:
     if not lead: raise KeyError("Unknown lead")
     events = timeline(conn,lead_id)
     action = next_action(events,dict(lead))
+    inventory = conn.execute("SELECT availability FROM vehicles WHERE stock_number=?", (lead["stock_number"],)).fetchone()
+    if inventory and inventory["availability"] == "SOLD" and action["stage"] not in ("SOLD","LOST"):
+        action = {"stage":"INTERESTED","code":"REVIEW_SOLD_VEHICLE",
+                  "objective":"Notify buyer appropriately and review available alternatives only if desired",
+                  "reason":"Salesperson explicitly marked the requested vehicle SOLD"}
     outcome = conn.execute("SELECT outcome,recorded_at FROM deal_outcomes WHERE lead_id=?",(lead_id,)).fetchone()
     return {"lead":dict(lead),"timeline":events,"recommendation":action,
             "outcome":dict(outcome) if outcome else None,
