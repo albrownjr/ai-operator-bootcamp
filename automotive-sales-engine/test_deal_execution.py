@@ -20,6 +20,7 @@ class DealExecutionTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory()
         os.environ["LEADS_DB_PATH"]=self.tmp.name+"/test.db"
         os.environ["ADMIN_TOKEN"]="integration-test-admin-only"
+        os.environ["MANAGEMENT_TOKEN"]="synthetic-manager-token"
         if "app" in sys.modules:
             del sys.modules["app"]
         import app
@@ -54,7 +55,8 @@ class DealExecutionTests(unittest.TestCase):
               "actor_name":"Test actor","occurred_at":when,
               "source":"in-person conversation" if actor_type=="customer" else "CRM manual record",
               "statement":statement or event_type,"idempotency_key":key or f"event-{self.sequence}"}
-        return self.client.post(f"/api/admin/leads/{self.lead_id}/events",json=data,headers=self.auth)
+        headers={**self.auth,**({"X-Management-Token":"synthetic-manager-token"} if actor_type=="management" else {})}
+        return self.client.post(f"/api/admin/leads/{self.lead_id}/events",json=data,headers=headers)
 
     def test_first_contact_to_sale(self):
         self.assertEqual(self.packet()["recommendation"]["code"],"FIRST_CONTACT")
@@ -118,7 +120,7 @@ class DealExecutionTests(unittest.TestCase):
         self.assertEqual(self.packet()["recommendation"]["code"],"REVIEW_SOLD_VEHICLE")
 
     def test_lost_outcome_requires_management(self):
-        self.assertEqual(self.event("DEAL_LOST","salesperson").status_code,422)
+        self.assertEqual(self.event("DEAL_LOST","salesperson").status_code,403)
         self.assertEqual(self.event("DEAL_LOST","management","Buyer declined purchase").status_code,200)
         self.assertEqual(self.packet()["outcome"]["outcome"],"LOST")
 
