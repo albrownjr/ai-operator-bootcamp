@@ -31,7 +31,7 @@ Every new inquiry produces an auditable `LEAD_CAPTURED` event with an exact stoc
 - `POST /api/admin/inventory/{stock_number}/status` — explicit SOLD or reactivation; response includes count of existing leads queued for review
 - `GET /api/admin/leads` / `GET /api/admin/leads.csv` / `GET /api/admin/stats` — protected lead operations
 
-Admin APIs require `Authorization: Bearer $ADMIN_TOKEN`; production fails closed if the token is unset.
+Admin APIs require `Authorization: Bearer $ADMIN_TOKEN`. Management actions additionally require `X-Management-Token: $MANAGEMENT_TOKEN`; it must be distinct from the operator token. These credentials are entered into the internal desk on the active tab and are not shipped in public source code. This is a two-credential safeguard, not a verified enterprise identity provider.
 
 ## Workflow
 1. Open `/admin` after deployment, provide the admin token, and register a current vehicle using the dealer's public listing URL, VIN, stock, year, make, model, etc.
@@ -77,7 +77,8 @@ Capture interest alone does not establish purchase intent, vehicle-condition acc
 Source: `albrownjr/ai-operator-bootcamp`, branch `automotive-sales-engine`, service root `/automotive-sales-engine`.
 
 On a production-capable Railway account or equivalent:
-- `ADMIN_TOKEN`: secure long random secret
+- `ADMIN_TOKEN`: secure long random operator secret
+- `MANAGEMENT_TOKEN`: **different** long random credential controlled by authorized management for PRICE_APPROVED, TRADE_APPROVED, FINANCING_STRUCTURE_CONFIRMED, PURCHASE_CONFIRMED, DELIVERY_COMPLETED and DEAL_LOST events; missing/same-as-admin manager token fails closed
 - `LEADS_DB_PATH=/data/leads.db`
 - Persistent volume mounted at `/data`
 - Start `uvicorn app:app --host 0.0.0.0 --port $PORT`; healthcheck `/health`.
