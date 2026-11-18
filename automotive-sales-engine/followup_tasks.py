@@ -91,6 +91,7 @@ def task_state(conn: sqlite3.Connection, task: dict, at: datetime|None=None) -> 
         ORDER BY occurred_at""",(task["lead_id"],)).fetchall()
     valid=[r for r in rows
            if r["actor_type"] in ("salesperson","management")
+           and parse_due(r["occurred_at"]) <= at.astimezone(timezone.utc)
            and local_due <= parse_due(r["occurred_at"]).astimezone(STORE_TZ).date() <= today]
     by_day={}
     for r in valid:
