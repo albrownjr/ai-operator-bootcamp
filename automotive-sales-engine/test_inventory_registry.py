@@ -89,7 +89,7 @@ class LeadIntegrationTests(unittest.TestCase):
 
     def test_vehicle_registration_and_sold_rejection(self):
         self.assertEqual(self.client.get("/v/JR270624").status_code, 404)
-        self.assertEqual(self.client.post("/api/admin/inventory", json=listing()).status_code, 200)
+        self.assertEqual(self.client.post("/api/admin/inventory", json=listing(), headers=self.auth).status_code, 200)
         self.assertEqual(self.client.get("/v/JR270624").status_code, 200)
         self.assertIn("Tahoe", self.client.get("/v/JR270624").text)
         payload = dict(stock_number="JR270624",first_name="Test",last_name="Buyer",
