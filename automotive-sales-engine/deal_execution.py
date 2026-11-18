@@ -89,6 +89,16 @@ def record_event(conn: sqlite3.Connection, lead_id: str, payload: dict[str, Any]
             return {"event_id":prior["id"],"duplicate":True}
         if conn.execute("SELECT lead_id FROM deal_outcomes WHERE lead_id=?",(lead_id,)).fetchone():
             raise ValueError("Deal closed; reopen requires a separate explicit workflow")
+        history = timeline(conn,lead_id)
+        previous_types = {item["event_type"] for item in history}
+        if event_type == "DELIVERY_COMPLETED" and "PURCHASE_CONFIRMED" not in previous_types:
+            raise ValueError("Delivery cannot be completed without documented purchase confirmation")
+        if event_type == "PURCHASE_CONFIRMED" and "QUOTE_ACCEPTED" not in previous_types:
+            raise ValueError("Purchase confirmation requires a documented buyer acceptance")
+        if event_type == "QUOTE_ACCEPTED" and "QUOTE_SENT" not in previous_types:
+            raise ValueError("Quote acceptance requires an actual quote sent event")
+        if event_type == "QUOTE_SENT" and "PRICE_APPROVED" not in previous_types:
+            raise ValueError("Quote cannot be recorded as sent before management price approval")
         ident = str(uuid.uuid4())
         conn.execute("""INSERT INTO deal_history
             (id,lead_id,event_type,actor_type,actor_name,occurred_at,recorded_at,source,statement,idempotency_key)
@@ -122,19 +132,19 @@ def next_action(events: list[dict], lead: dict | None = None) -> dict:
         return {"stage":"SOLD","code":"NONE","objective":"Sale completed; no active sales task","reason":"Management-recorded delivery"}
     if "DEAL_LOST" in types:
         return {"stage":"LOST","code":"NONE","objective":"Record loss reason; no unsolicited pursuit","reason":"Management-recorded loss"}
-    if "BUYER_DECLINED" in types:
+    if last_customer and last_customer["event_type"] == "BUYER_DECLINED":
         return {"stage":"INTERESTED","code":"REVIEW_BUYER_DECLINE",
                 "objective":"Respect the buyer's decision; decide whether any contact is appropriate",
                 "reason":"Buyer explicitly declined"}
-    if "QUOTE_CONCERN" in types and (not last_customer or last_customer["event_type"]=="QUOTE_CONCERN"):
+    if last_customer and last_customer["event_type"] == "QUOTE_CONCERN":
         return {"stage":"DEAL_PLANNING","code":"RESOLVE_QUOTE_CONCERN",
                 "objective":"Understand the specific quote concern; obtain approved clarification",
                 "reason":"Latest buyer statement identifies quote concern"}
-    if "CONDITION_CONCERN" in types and (not last_customer or last_customer["event_type"]=="CONDITION_CONCERN"):
+    if last_customer and last_customer["event_type"] == "CONDITION_CONCERN":
         return {"stage":"ENGAGED","code":"RESOLVE_CONDITION_CONCERN",
                 "objective":"Resolve exact condition concern with evidence",
                 "reason":"Latest buyer statement identifies condition concern"}
-    has_contact = bool(types & ({"CALL_ATTEMPTED","TEXT_SENT","EMAIL_SENT"}))
+    has_contact = bool(types & {"CALL_ATTEMPTED","PHONE_CONVERSATION","TEXT_SENT","EMAIL_SENT"})
     if not has_contact:
         return {"stage":"NEW","code":"FIRST_CONTACT",
                 "objective":"Make a permitted personal contact attempt about the requested vehicle",
