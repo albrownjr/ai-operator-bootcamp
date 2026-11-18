@@ -27,3 +27,25 @@ jobs:
       - name: Run inventory and decision regression suite
         working-directory: automotive-sales-engine
         run: python -m unittest -v test_inventory_registry.py test_decision_intelligence.py test_deal_execution.py test_critical_controls.py
+
+      - name: Build production Docker image
+        run: docker build -t sales-engine-smoke ./automotive-sales-engine
+      - name: Boot isolated API and test deployment endpoints
+        run: |
+          mkdir -p "$RUNNER_TEMP/sales-db"
+          docker run --rm -d --name sales-engine-smoke \
+            --publish 127.0.0.1:18000:8000 \
+            --env ADMIN_TOKEN=ci-operator-only \
+            --env MANAGEMENT_TOKEN=ci-manager-only \
+            --env LEADS_DB_PATH=/data/leads.db \
+            --volume "$RUNNER_TEMP/sales-db:/data" \
+            sales-engine-smoke
+          trap 'docker logs sales-engine-smoke || true; docker stop sales-engine-smoke || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18000/health; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18000/health | python -c 'import json,sys;assert json.load(sys.stdin)["ok"] is True'
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18000/api/admin/leads)" = 401
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18000/v/UNKNOWN)" = 404
+          curl -fsS -H 'Authorization: Bearer ci-operator-only' http://127.0.0.1:18000/api/admin/metrics/funnel | python -c 'import json,sys;x=json.load(sys.stdin);assert x["scope"]=="THIS_APPLICATION_ONLY" and x["overall"]["leads"]==0'
