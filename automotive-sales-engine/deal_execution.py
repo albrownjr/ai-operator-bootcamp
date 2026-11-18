@@ -91,15 +91,33 @@ def record_event(conn: sqlite3.Connection, lead_id: str, payload: dict[str, Any]
         if conn.execute("SELECT lead_id FROM deal_outcomes WHERE lead_id=?",(lead_id,)).fetchone():
             raise ValueError("Deal closed; reopen requires a separate explicit workflow")
         history = timeline(conn,lead_id)
-        previous_types = {item["event_type"] for item in history}
-        if event_type == "DELIVERY_COMPLETED" and "PURCHASE_CONFIRMED" not in previous_types:
-            raise ValueError("Delivery cannot be completed without documented purchase confirmation")
-        if event_type == "PURCHASE_CONFIRMED" and "QUOTE_ACCEPTED" not in previous_types:
-            raise ValueError("Purchase confirmation requires a documented buyer acceptance")
-        if event_type == "QUOTE_ACCEPTED" and "QUOTE_SENT" not in previous_types:
-            raise ValueError("Quote acceptance requires an actual quote sent event")
-        if event_type == "QUOTE_SENT" and "PRICE_APPROVED" not in previous_types:
-            raise ValueError("Quote cannot be recorded as sent before management price approval")
+        # Backdated source records are valid, but cannot be used to claim that
+        # an action preceded its required evidence.
+        def latest(types):
+            return next((entry for entry in reversed(history) if entry["event_type"] in types),None)
+        dependencies = {
+            "QUOTE_SENT": {"PRICE_APPROVED"},
+            "QUOTE_ACCEPTED": {"QUOTE_SENT"},
+            "PURCHASE_CONFIRMED": {"QUOTE_ACCEPTED"},
+            "DELIVERY_COMPLETED": {"PURCHASE_CONFIRMED"},
+        }
+        dependency = dependencies.get(event_type)
+        if dependency:
+            previous = latest(dependency)
+            if previous is None or parse_timestamp(previous["occurred_at"]) > when:
+                raise ValueError(f"{event_type} requires preceding, timestamped {sorted(dependency)[0]}")
+        if event_type == "PURCHASE_CONFIRMED":
+            reaction = latest({"QUOTE_ACCEPTED","QUOTE_CONCERN","BUYER_DECLINED"})
+            if reaction is None or reaction["event_type"] != "QUOTE_ACCEPTED":
+                raise ValueError("Latest buyer deal decision must explicitly accept the quote")
+        if event_type == "DELIVERY_COMPLETED":
+            reaction = latest({"QUOTE_ACCEPTED","QUOTE_CONCERN","BUYER_DECLINED"})
+            if reaction is None or reaction["event_type"] != "QUOTE_ACCEPTED":
+                raise ValueError("A later buyer objection/decline blocks a completed sale")
+        if event_type in {"QUOTE_ACCEPTED","PURCHASE_CONFIRMED","DELIVERY_COMPLETED"}:
+            existing_approval = latest({"PRICE_APPROVED"})
+            if existing_approval is None or parse_timestamp(existing_approval["occurred_at"]) > when:
+                raise ValueError("Approved price evidence must precede a completed transaction")
         ident = str(uuid.uuid4())
         conn.execute("""INSERT INTO deal_history
             (id,lead_id,event_type,actor_type,actor_name,occurred_at,recorded_at,source,statement,idempotency_key)
@@ -133,15 +151,23 @@ def next_action(events: list[dict], lead: dict | None = None) -> dict:
         return {"stage":"SOLD","code":"NONE","objective":"Sale completed; no active sales task","reason":"Management-recorded delivery"}
     if "DEAL_LOST" in types:
         return {"stage":"LOST","code":"NONE","objective":"Record loss reason; no unsolicited pursuit","reason":"Management-recorded loss"}
-    if last_customer and last_customer["event_type"] == "BUYER_DECLINED":
+    latest_decline = next((e for e in reversed(events) if e["event_type"] == "BUYER_DECLINED"),None)
+    latest_reengagement = next((e for e in reversed(events) if e["event_type"] in
+        {"MOTIVATION_STATED","TIMELINE_STATED","FINANCING_STATED","CONDITION_ACCEPTED","QUOTE_ACCEPTED"}),None)
+    if latest_decline and (latest_reengagement is None or
+        parse_timestamp(latest_decline["occurred_at"]) >= parse_timestamp(latest_reengagement["occurred_at"])):
         return {"stage":"INTERESTED","code":"REVIEW_BUYER_DECLINE",
                 "objective":"Respect the buyer's decision; decide whether any contact is appropriate",
                 "reason":"Buyer explicitly declined"}
-    if last_customer and last_customer["event_type"] == "QUOTE_CONCERN":
+    latest_quote_decision = next((e for e in reversed(events) if e["event_type"] in
+        {"QUOTE_CONCERN","QUOTE_ACCEPTED"}),None)
+    if latest_quote_decision and latest_quote_decision["event_type"] == "QUOTE_CONCERN":
         return {"stage":"DEAL_PLANNING","code":"RESOLVE_QUOTE_CONCERN",
                 "objective":"Understand the specific quote concern; obtain approved clarification",
                 "reason":"Latest buyer statement identifies quote concern"}
-    if last_customer and last_customer["event_type"] == "CONDITION_CONCERN":
+    latest_condition_decision = next((e for e in reversed(events) if e["event_type"] in
+        {"CONDITION_CONCERN","CONDITION_ACCEPTED"}),None)
+    if latest_condition_decision and latest_condition_decision["event_type"] == "CONDITION_CONCERN":
         return {"stage":"ENGAGED","code":"RESOLVE_CONDITION_CONCERN",
                 "objective":"Resolve exact condition concern with evidence",
                 "reason":"Latest buyer statement identifies condition concern"}
