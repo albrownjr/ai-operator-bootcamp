@@ -126,6 +126,9 @@ def set_sold(conn: sqlite3.Connection, stock_number: str, sold: bool, actor: str
         current = conn.execute("SELECT stock_number FROM vehicles WHERE stock_number=?", (stock,)).fetchone()
         if not current:
             raise KeyError("Unknown stock number")
+        old_status = conn.execute("SELECT availability FROM vehicles WHERE stock_number=?", (stock,)).fetchone()["availability"]
+        if old_status == new_status:
+            return get_vehicle(conn, stock)
         conn.execute("""UPDATE vehicles SET availability=?, status_changed_at=?, status_actor=?
             WHERE stock_number=?""", (new_status,now,actor,stock))
         conn.execute("""INSERT INTO inventory_audit(stock_number,event_type,occurred_at,actor,details)
