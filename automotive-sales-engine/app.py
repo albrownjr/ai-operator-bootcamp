@@ -30,6 +30,7 @@ VOLUME_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
 DEFAULT_DB = Path(VOLUME_DIR) / "leads.db" if VOLUME_DIR else BASE_DIR / "leads.db"
 DB_PATH = Path(os.getenv("LEADS_DB_PATH", str(DEFAULT_DB)))
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "").strip()
+MANAGEMENT_TOKEN = os.getenv("MANAGEMENT_TOKEN", "").strip()
 CONSENT_VERSION = "2026-09-25-v1"
 
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -523,8 +524,17 @@ def admin_deal_packet(lead_id: str, authorization: str | None = Header(default=N
 
 @app.post("/api/admin/leads/{lead_id}/events")
 def admin_record_deal_event(lead_id: str, payload: DealEventIn,
-                            authorization: str | None = Header(default=None)) -> dict[str, Any]:
+                            authorization: str | None = Header(default=None),
+                            x_management_token: str | None = Header(default=None)) -> dict[str, Any]:
     require_admin(authorization)
+    if payload.actor_type.lower() == "management" or payload.event_type.upper() in {
+        "PRICE_APPROVED","TRADE_APPROVED","FINANCING_STRUCTURE_CONFIRMED",
+        "PURCHASE_CONFIRMED","DELIVERY_COMPLETED","DEAL_LOST"
+    }:
+        if not MANAGEMENT_TOKEN or MANAGEMENT_TOKEN == ADMIN_TOKEN:
+            raise HTTPException(status_code=503, detail="Separate management approval credential not configured")
+        if x_management_token != MANAGEMENT_TOKEN:
+            raise HTTPException(status_code=403, detail="Management approval credential required")
     try:
         with db() as conn:
             result = record_event(conn, lead_id, payload.model_dump())
