@@ -31,7 +31,7 @@ class DecisionPacketTests(unittest.TestCase):
         p = decision_packet("JR270624", [ev("availability", True, hours=5),
             ev("availability", False, hours=1)], NOW)
         self.assertEqual(p["facts"]["availability"]["value"], False)
-        self.assertTrue(p["guards"]["can_claim_available"])
+        self.assertFalse(p["guards"]["can_claim_available"])
 
     def test_buyer_claim_requires_buyer_source(self):
         p = decision_packet("JR270624", [ev("buyer_timing", "tomorrow",
