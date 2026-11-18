@@ -5,6 +5,7 @@ lead cohorts are required before concluding that sales performance improved.
 """
 from __future__ import annotations
 from datetime import datetime, timezone
+from contextlib import nullcontext
 import sqlite3
 import uuid
 
@@ -33,7 +34,7 @@ def record_baseline(conn: sqlite3.Connection, data: dict) -> dict:
     if any(n<0 for n in counts.values()) or any(n>counts["leads"] for k,n in counts.items() if k!="leads"):
         raise ValueError("Funnel counts must be nonnegative and no greater than leads")
     ident=str(uuid.uuid4())
-    with conn:
+    with nullcontext(conn):
         conn.execute("""INSERT INTO sales_baselines
           (id,start_day,end_day,lead_source,leads,contacted,quotes,sold,
            evidence_reference,recorded_by,recorded_at)
