@@ -3,10 +3,18 @@
 Buyer-first sequencing: motivation -> timeline -> finances; vehicle verification
 and explicit buyer requests may run in parallel. Never send automatically.
 """
+from decision_intelligence import Evidence, decision_packet
+
+
 def first_contact_plan(lead: dict, vehicle: dict) -> dict:
     name = " ".join(str(vehicle.get(k) or "").strip() for k in ("year","make","model","trim")).strip()
     channel = lead.get("preferred_contact", "text")
+    evidence = [Evidence("availability", vehicle["availability"] == "AVAILABLE",
+                         vehicle["source_observed_at"], "extremeautoplex.com",
+                         verified_by="owner_inventory_rule")]
+    decision = decision_packet(vehicle["stock_number"], evidence)
     return {
+        "decision_snapshot": decision,
         "stage": "INTERESTED",
         "owner": "salesperson",
         "action": "FIRST_CONTACT",
