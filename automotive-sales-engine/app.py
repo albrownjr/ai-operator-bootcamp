@@ -22,6 +22,7 @@ from vehicle_page import render_vehicle
 from sales_orchestrator import first_contact_plan
 from deal_execution import init_deal_execution, record_event, deal_packet
 from followup_tasks import init_tasks, create_task, cancel_task, lead_tasks, due_queue
+from sales_metrics import funnel_report
 
 BASE_DIR = Path(__file__).resolve().parent
 VOLUME_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
@@ -554,3 +555,10 @@ def admin_cancel_task(task_id: str,payload: CancelFollowupIn,
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/admin/metrics/funnel")
+def admin_sales_funnel(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    require_admin(authorization)
+    with db() as conn:
+        return funnel_report(conn)
