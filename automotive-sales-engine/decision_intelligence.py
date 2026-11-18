@@ -93,7 +93,8 @@ def decision_packet(stock_number: str, evidence: list[Evidence],
     action = ACTIONS[next_field] if next_field else ("REVIEW_DEAL", "Review the approved deal with the buyer")
     safe_to_quote_price = (statuses["advertised_price"]["status"] == "verified"
                            and statuses["total_price"]["status"] == "verified")
-    safe_to_claim_available = statuses["availability"]["status"] == "verified"
+    safe_to_claim_available = (statuses["availability"]["status"] == "verified"
+                              and statuses["availability"]["value"] is True)
     return {
         "stock_number": stock_number,
         "evaluated_at": now.isoformat(),
