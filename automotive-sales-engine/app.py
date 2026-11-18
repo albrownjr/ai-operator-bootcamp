@@ -33,23 +33,6 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Vehicle Lead Capture", version="0.2.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-VEHICLE = {
-    "year": 2018,
-    "make": "Chevrolet",
-    "model": "Tahoe",
-    "trim": "LS Sport Utility 4D",
-    "vin": "1GNSCAKC2JR270624",
-    "stock_number": "JR270624",
-    "mileage": 137069,
-    "price": 17590,
-    "exterior_color": "Red",
-    "interior_color": "Gray",
-    "engine": "5.3L V8 EcoTec3",
-    "transmission": "Automatic",
-    "drivetrain": "2WD",
-    "location": "Spring, TX",
-    "dealer": "Extreme Autoplex LLC",
-}
 
 _submissions: dict[str, deque[float]] = defaultdict(deque)
 
@@ -398,6 +381,11 @@ def export_leads(authorization: str | None = Header(default=None)) -> StreamingR
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=leads.csv"},
     )
+
+
+@app.get("/admin")
+def admin_page() -> FileResponse:
+    return FileResponse(BASE_DIR / "admin.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/vehicles")
