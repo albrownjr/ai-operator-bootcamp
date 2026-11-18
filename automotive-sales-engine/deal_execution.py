@@ -6,6 +6,7 @@ customer agreement, lending decisions, prices or SOLD outcomes.
 """
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
+from contextlib import nullcontext
 from typing import Any
 from followup_tasks import lead_tasks
 import json
@@ -78,7 +79,7 @@ def record_event(conn: sqlite3.Connection, lead_id: str, payload: dict[str, Any]
         raise ValueError("Future events are not allowed")
     if actor=="customer" and source=="workflow":
         raise ValueError("Automated workflow cannot be the source of customer statements")
-    with conn:
+    with nullcontext(conn):
         lead = conn.execute("SELECT id,preferred_contact,stock_number FROM leads WHERE id=?",(lead_id,)).fetchone()
         if not lead:
             raise KeyError("Unknown lead")
