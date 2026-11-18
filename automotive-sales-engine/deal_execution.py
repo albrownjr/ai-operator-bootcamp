@@ -205,10 +205,14 @@ def deal_packet(conn: sqlite3.Connection, lead_id: str) -> dict:
     tasks = lead_tasks(conn,lead_id)
     due = [t for t in tasks if t["computed_status"] in ("DUE_TODAY","OVERDUE")]
     if due and not outcome:
-        action = {"stage":action["stage"],
-                  "code":"PERSONAL_FOLLOWUP_DUE",
+        task = due[0]
+        task_action = task["required_action"]
+        priority_code = ("FIRST_CONTACT" if task_action == "PERSONAL_CALL" and
+                         not events else task_action)
+        action = {"stage":action["stage"],"code":priority_code,
                   "objective":"Complete required personal contact for the due/overdue follow-up task",
-                  "reason":"An active due follow-up cannot be skipped; review the task's permitted channel and recorded contact"}
+                  "reason":"A due personal follow-up cannot be skipped; check task permission and chronology",
+                  "task_id":task["id"],"task_status":task["computed_status"]}
     return {"lead":dict(lead),"timeline":events,"recommendation":action,
             "tasks":tasks,"due_task_count":len(due),
             "deal_progress_action":next_action(events,dict(lead)),
