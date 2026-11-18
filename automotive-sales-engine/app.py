@@ -23,6 +23,7 @@ from sales_orchestrator import first_contact_plan
 from deal_execution import init_deal_execution, record_event, deal_packet
 from followup_tasks import init_tasks, create_task, cancel_task, lead_tasks, due_queue
 from sales_metrics import funnel_report
+from performance_baseline import init_baselines, record_baseline, list_baselines
 
 BASE_DIR = Path(__file__).resolve().parent
 VOLUME_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
@@ -102,6 +103,7 @@ def init_db() -> None:
         init_inventory(conn)
         init_deal_execution(conn)
         init_tasks(conn)
+        init_baselines(conn)
 
 
 init_db()
@@ -122,6 +124,18 @@ class InventoryIn(BaseModel):
 
 class SoldIn(BaseModel):
     sold: bool
+
+
+class BaselineIn(BaseModel):
+    start_day: str
+    end_day: str
+    lead_source: str = Field(min_length=1,max_length=100)
+    leads: int = Field(ge=0)
+    contacted: int = Field(ge=0)
+    quotes: int = Field(ge=0)
+    sold: int = Field(ge=0)
+    evidence_reference: str = Field(min_length=3,max_length=500)
+    recorded_by: str = Field(min_length=1,max_length=120)
 
 
 class FollowupTaskIn(BaseModel):
@@ -562,3 +576,21 @@ def admin_sales_funnel(authorization: str | None = Header(default=None)) -> dict
     require_admin(authorization)
     with db() as conn:
         return funnel_report(conn)
+
+
+@app.get("/api/admin/metrics/baselines")
+def admin_baselines(authorization: str | None = Header(default=None)) -> list[dict[str, Any]]:
+    require_admin(authorization)
+    with db() as conn:
+        return list_baselines(conn)
+
+
+@app.post("/api/admin/metrics/baselines")
+def admin_create_baseline(payload: BaselineIn,
+                          authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    require_admin(authorization)
+    try:
+        with db() as conn:
+            return record_baseline(conn,payload.model_dump())
+    except (ValueError,KeyError) as exc:
+        raise HTTPException(status_code=422,detail=str(exc)) from exc
