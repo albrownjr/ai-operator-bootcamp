@@ -21,4 +21,4 @@ jobs:
           python -m pip install 'httpx>=0.27,<1'
       - name: Run inventory and decision regression suite
         working-directory: automotive-sales-engine
-        run: python -m unittest -v test_inventory_registry.py test_decision_intelligence.py test_deal_execution.py
+        run: python -m unittest -v test_inventory_registry.py test_decision_intelligence.py test_deal_execution.py test_critical_controls.py
