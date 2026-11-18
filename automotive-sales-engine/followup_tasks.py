@@ -83,35 +83,51 @@ def task_state(conn: sqlite3.Connection, task: dict, at: datetime|None=None) -> 
     due=parse_due(task["due_at"])
     local_due=due.astimezone(STORE_TZ).date()
     today=at.astimezone(STORE_TZ).date()
+    # A task's personal contact can satisfy it on the due day. An overdue
+    # task can be completed later, but must never be labelled on-time.
     rows=conn.execute("""SELECT event_type,actor_type,occurred_at FROM deal_history
-        WHERE lead_id=? AND event_type IN ('CALL_ATTEMPTED','PHONE_CONVERSATION','TEXT_SENT','EMAIL_SENT')""",
-        (task["lead_id"],)).fetchall()
-    same_day=[r["event_type"] for r in rows
-              if r["actor_type"] in ("salesperson","management") and
-              parse_due(r["occurred_at"]).astimezone(STORE_TZ).date()==local_due]
-    called="CALL_ATTEMPTED" in same_day or "PHONE_CONVERSATION" in same_day
+        WHERE lead_id=? AND event_type IN ('CALL_ATTEMPTED','PHONE_CONVERSATION','TEXT_SENT','EMAIL_SENT')
+        ORDER BY occurred_at""",(task["lead_id"],)).fetchall()
+    valid=[r for r in rows
+           if r["actor_type"] in ("salesperson","management")
+           and local_due <= parse_due(r["occurred_at"]).astimezone(STORE_TZ).date() <= today]
+    by_day={}
+    for r in valid:
+        day=parse_due(r["occurred_at"]).astimezone(STORE_TZ).date()
+        by_day.setdefault(day,set()).add(r["event_type"])
+    policy=task["channel_policy"]
+    def complete(kinds):
+        called=bool({"CALL_ATTEMPTED","PHONE_CONVERSATION"} & kinds)
+        spoken="PHONE_CONVERSATION" in kinds
+        texted="TEXT_SENT" in kinds
+        emailed="EMAIL_SENT" in kinds
+        return {"CALL_TEXT": called and (spoken or texted),
+                "CALL_ONLY": called, "TEXT_ONLY": texted, "EMAIL_ONLY": emailed}[policy]
+    done_day=next((day for day in sorted(by_day) if complete(by_day[day])),None)
+    same_day=by_day.get(today,set())
+    called=bool({"CALL_ATTEMPTED","PHONE_CONVERSATION"} & same_day)
     spoken="PHONE_CONVERSATION" in same_day
     texted="TEXT_SENT" in same_day
     emailed="EMAIL_SENT" in same_day
-    policy=task["channel_policy"]
-    satisfied=({"CALL_TEXT":called and (spoken or texted),
-                "CALL_ONLY":called, "TEXT_ONLY":texted, "EMAIL_ONLY":emailed})[policy]
     if task["status"]=="CANCELLED": status="CANCELLED"
-    elif satisfied: status="FULFILLED"
+    elif done_day is not None: status="FULFILLED" if done_day==local_due else "FULFILLED_LATE"
     elif local_due>today: status="FUTURE"
     elif local_due<today: status="OVERDUE"
     else: status="DUE_TODAY"
-    if status in ("FULFILLED","CANCELLED"): action="NONE"
-    elif policy=="CALL_TEXT" and called and not (spoken or texted) and local_due==today:
+    if status in ("FULFILLED","FULFILLED_LATE","CANCELLED"): action="NONE"
+    elif policy=="CALL_TEXT" and called and not (spoken or texted):
         action="SEND_CONTEXTUAL_TEXT"
     elif policy in ("CALL_TEXT","CALL_ONLY"): action="PERSONAL_CALL"
     elif policy=="TEXT_ONLY": action="PERSONAL_TEXT"
     else: action="PERSONAL_EMAIL"
     return {**task,"computed_status":status,"required_action":action,
             "due_local_day":local_due.isoformat(),
-            "personal_call_recorded":called,"meaningful_phone_conversation_recorded":spoken,
-            "personal_text_recorded":texted,"personal_email_recorded":emailed,
-            "note":"CRM tasks are known only when manually entered; fulfillment requires matching dated personal activity."}
+            "completed_local_day":done_day.isoformat() if done_day else None,
+            "personal_call_recorded_today":called,
+            "meaningful_phone_conversation_recorded_today":spoken,
+            "personal_text_recorded_today":texted,
+            "personal_email_recorded_today":emailed,
+            "note":"Personal contact must be documented; late fulfillment does not erase the missed due-day standard."}
 
 def lead_tasks(conn: sqlite3.Connection, lead_id: str, at: datetime|None=None) -> list[dict]:
     rows=conn.execute("SELECT * FROM sales_tasks WHERE lead_id=? ORDER BY due_at,id",(lead_id,)).fetchall()
