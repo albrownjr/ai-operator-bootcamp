@@ -82,11 +82,15 @@ def record_event(conn: sqlite3.Connection, lead_id: str, payload: dict[str, Any]
         lead = conn.execute("SELECT id,preferred_contact,stock_number FROM leads WHERE id=?",(lead_id,)).fetchone()
         if not lead:
             raise KeyError("Unknown lead")
-        prior = conn.execute("SELECT id,event_type FROM deal_history WHERE lead_id=? AND idempotency_key=?",
+        prior = conn.execute("""SELECT id,event_type,actor_type,actor_name,occurred_at,source,statement
+                             FROM deal_history WHERE lead_id=? AND idempotency_key=?""",
                              (lead_id,key)).fetchone()
         if prior:
-            if prior["event_type"]!=event_type:
-                raise ValueError("Idempotency key reused for different event")
+            same = (prior["event_type"]==event_type and prior["actor_type"]==actor
+                    and prior["actor_name"]==actor_name and prior["source"]==source
+                    and prior["statement"]==statement and prior["occurred_at"]==when.isoformat())
+            if not same:
+                raise ValueError("Idempotency key reused with conflicting evidence")
             return {"event_id":prior["id"],"duplicate":True}
         if conn.execute("SELECT lead_id FROM deal_outcomes WHERE lead_id=?",(lead_id,)).fetchone():
             raise ValueError("Deal closed; reopen requires a separate explicit workflow")
@@ -129,6 +133,12 @@ def record_event(conn: sqlite3.Connection, lead_id: str, payload: dict[str, Any]
                 VALUES (?,?,?,?)""",(lead_id,outcome,ident,now.isoformat()))
             conn.execute("UPDATE leads SET opportunity_status=?, next_action='NONE' WHERE id=?",
                          (outcome,lead_id))
+            # Clear only this application's own follow-up; CRM tasks remain
+            # visible for explicit reconciliation with DealerCenter.
+            conn.execute("""UPDATE sales_tasks SET status='CANCELLED',cancelled_at=?,
+                cancel_reason='Deal closed by recorded outcome'
+                WHERE lead_id=? AND source='ENGINE' AND status='OPEN'""",
+                (now.isoformat(),lead_id))
         else:
             action = next_action(timeline(conn,lead_id),dict(lead))
             vehicle = conn.execute("SELECT availability FROM vehicles WHERE stock_number=?", (lead["stock_number"],)).fetchone()
