@@ -104,6 +104,11 @@ class LeadIntegrationTests(unittest.TestCase):
             events = conn.execute("SELECT count(*) FROM engine_events").fetchone()[0]
         self.assertEqual((lead["stock_number"],lead["vehicle_vin"]),( "JR270624", VIN))
         self.assertEqual(events, 1)
+        with self.db() as conn:
+            import json
+            event_payload = json.loads(conn.execute("SELECT payload_json FROM engine_events").fetchone()[0])
+        self.assertEqual(event_payload["sales_plan"]["action"], "FIRST_CONTACT")
+        self.assertEqual(event_payload["sales_plan"]["decision_snapshot"]["facts"]["availability"]["status"], "verified")
         self.assertEqual(self.client.post("/api/admin/inventory/JR270624/status",
                           json={"sold": True}, headers=self.auth).status_code, 200)
         self.assertEqual(self.client.get("/v/JR270624").status_code, 404)
