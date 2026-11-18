@@ -3,8 +3,12 @@ let current=null;
 const msg=text=>g("status").textContent=text;
 async function request(path,options={}){
  const token=g("token").value.trim();if(!token)throw Error("Enter admin token");
- const r=await fetch(path,{...options,cache:"no-store",headers:{
- "Authorization":"Bearer "+token,...(options.body?{"Content-Type":"application/json"}:{})}});
+ const {requireManager,...requestOptions}=options;
+ const manager=requireManager?g("managerToken").value.trim():"";
+ if(requireManager&&!manager)throw Error("Separate manager credential required for this recorded approval");
+ const r=await fetch(path,{...requestOptions,cache:"no-store",headers:{
+ "Authorization":"Bearer "+token,...(requestOptions.body?{"Content-Type":"application/json"}:{}),
+ ...(requireManager?{"X-Management-Token":manager}:{})}});
  const data=await r.json();if(!r.ok)throw Error(typeof data.detail==="string"?data.detail:JSON.stringify(data.detail));return data;
 }
 async function load(){
@@ -91,7 +95,7 @@ g("record").onsubmit=async e=>{
  data.occurred_at=time.toISOString();
  data.idempotency_key=(globalThis.crypto?.randomUUID?.()||String(Date.now())+"-"+Math.random());
  try{const result=await request("/api/admin/leads/"+encodeURIComponent(current)+"/events",
-   {method:"POST",body:JSON.stringify(data)});
+   {method:"POST",body:JSON.stringify(data),requireManager:data.actor_type==="management"});
   if(!result.duplicate){e.target.reset();g("occurred").value=""}
   await openDeal(current);await load();msg("Event saved with recorded and actual timestamps.");
  }catch(err){msg(err.message)}
